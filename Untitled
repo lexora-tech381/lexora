@@ -1,0 +1,22 @@
+export default function Home() {
+  return (
+    <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6">
+      <h1 className="text-5xl font-bold mb-6">
+        Humanizer AI
+      </h1>
+
+      <p className="text-gray-400 mb-8">
+        Make AI text sound more natural and human.
+      </p>
+
+      <textarea
+        className="w-full max-w-2xl h-64 p-4 rounded-lg bg-zinc-900 border border-zinc-700 outline-none"
+        placeholder="Paste your text here..."
+      />
+
+      <button className="mt-6 px-6 py-3 bg-white text-black rounded-lg font-semibold hover:opacity-80">
+        Humanize Text
+      </button>
+    </main>
+  );
+}
