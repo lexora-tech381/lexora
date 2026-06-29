@@ -1,5 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 import {
   LayoutDashboard,
@@ -18,6 +20,49 @@ import {
 
 export default function UsagePage() {
   const router = useRouter();
+  const [todayUsage, setTodayUsage] = useState(0);
+const [documentsCount, setDocumentsCount] = useState(0);
+const [wordsProcessed, setWordsProcessed] = useState(0);
+useEffect(() => {
+  const loadUsageData = async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      router.push("/login");
+      return;
+    }
+
+    const today = new Date().toISOString().split("T")[0];
+
+    const { data: usage } = await supabase
+      .from("usage")
+      .select("count")
+      .eq("user_id", session.user.id)
+      .eq("date", today)
+      .maybeSingle();
+
+    setTodayUsage(usage?.count || 0);
+
+    const { data: documents } = await supabase
+      .from("documents")
+      .select("humanized_text")
+      .eq("user_id", session.user.id);
+
+    setDocumentsCount(documents?.length || 0);
+
+    const totalWords =
+      documents?.reduce((total, doc) => {
+        const words = doc.humanized_text?.trim().split(/\s+/).length || 0;
+        return total + words;
+      }, 0) || 0;
+
+    setWordsProcessed(totalWords);
+  };
+
+  loadUsageData();
+}, [router]);
   return (
     <main style={page}>
       <aside style={sidebar}>
@@ -54,10 +99,27 @@ export default function UsagePage() {
         </header>
 
         <section style={statsGrid}>
-          <Stat icon={<Activity />} label="Daily Uses" value="8 / 10" note="80% used today" />
-          <Stat icon={<TrendingUp />} label="Weekly Uses" value="42" note="+12 this week" green />
+        <Stat
+  icon={<Activity />}
+  label="Daily Uses"
+  value={`${todayUsage} / 10`}
+  note={`${Math.round((todayUsage / 10) * 100)}% used today`}
+/>
+<Stat
+  icon={<TrendingUp />}
+  label="Saved Documents"
+  value={documentsCount}
+  note="Total documents"
+  green
+/>
           <Stat icon={<Zap />} label="Monthly Uses" value="156" note="+34 this month" orange />
-          <Stat icon={<FileText />} label="Words Processed" value="24,580" note="All time" blue />
+          <Stat
+  icon={<FileText />}
+  label="Words Processed"
+  value={wordsProcessed}
+  note="All time"
+  blue
+/>
         </section>
 
         <section style={mainGrid}>
@@ -110,11 +172,18 @@ export default function UsagePage() {
             </div>
 
             <div style={progressTrack}>
-              <div style={progressFill}></div>
+            <div
+  style={{
+    ...progressFill,
+    width: `${(todayUsage / 10) * 100}%`,
+  }}
+></div>
             </div>
 
-            <h3>8 of 10 uses used today</h3>
-            <p style={mutedSmall}>Your limit resets in 12h 46m.</p>
+            <h3>{todayUsage} of 10 uses used today</h3>
+            <p style={mutedSmall}>
+  Your daily limit resets at midnight.
+</p>
           </div>
 
           <div style={breakdownCard}>

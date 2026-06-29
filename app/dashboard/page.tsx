@@ -1,5 +1,7 @@
 "use client";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 import {
   LayoutDashboard,
@@ -15,10 +17,74 @@ import {
   Zap,
   TrendingUp,
   MoreVertical,
+  LogOut,
 } from "lucide-react";
 
 export default function DashboardPage() {
   const router = useRouter();
+  
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [documentsCount, setDocumentsCount] = useState(0);
+  const [todayUsage, setTodayUsage] = useState(0);
+  const [recentDocuments, setRecentDocuments] = useState<any[]>([]);
+  useEffect(() => {
+    async function checkSession() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.replace("/login");
+        return;
+      }
+
+      setCheckingSession(false);
+      const today = new Date().toISOString().split("T")[0];
+
+// Total documents
+const { count } = await supabase
+  .from("documents")
+  .select("*", { count: "exact", head: true })
+  .eq("user_id", session.user.id);
+
+setDocumentsCount(count || 0);
+
+// Today's usage
+const { data: usage } = await supabase
+  .from("usage")
+  .select("count")
+  .eq("user_id", session.user.id)
+  .eq("date", today)
+  .maybeSingle();
+
+setTodayUsage(usage?.count || 0);
+
+// Recent documents
+const { data: docs } = await supabase
+  .from("documents")
+  .select("*")
+  .eq("user_id", session.user.id)
+  .order("created_at", { ascending: false })
+  .limit(5);
+
+setRecentDocuments(docs || []);
+    }
+
+    checkSession();
+  }, [router]);
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    router.push("/login");
+  }
+
+  if (checkingSession) {
+    return (
+      <main style={loadingPage}>
+        <p style={loadingText}>Loading dashboard...</p>
+      </main>
+    );
+  }
 
   return (
     <main style={page}>
@@ -33,6 +99,7 @@ export default function DashboardPage() {
           <button onClick={() => (window.location.href = "/pricing")} style={navItem}><CreditCard size={18} />Pricing</button>
           <button onClick={() => (window.location.href = "/settings")} style={navItem}><Settings size={18} />Settings</button>
           <button onClick={() => (window.location.href = "/support")} style={navItem}><LifeBuoy size={18} />Support</button>
+          <button onClick={handleLogout} style={navItem}><LogOut size={18} />Logout</button>
         </nav>
 
         <div style={upgradeBox}>
@@ -54,17 +121,34 @@ export default function DashboardPage() {
 
           <div style={topActions}>
             <span style={planBadge}>★ Free Plan</span>
-            <span style={usageBadge}>8 / 10 uses</span>
+            <span style={usageBadge}>{todayUsage} / 10 uses</span>
             <Bell size={22} />
             <div style={avatar}>C</div>
           </div>
         </header>
 
         <section style={statsGrid}>
-          <Card icon={<FileText />} title="Total Documents" value="12" note="+3 this week" />
+        <Card
+  icon={<FileText />}
+  title="Total Documents"
+  value={documentsCount}
+  note="Your saved documents"
+/>
           <Card icon={<TrendingUp />} title="Total Words" value="4,250" note="+1,250 this week" green />
-          <Card icon={<Zap />} title="Humanizations" value="28" note="+6 this week" orange />
-          <Card icon={<Clock />} title="Remaining Uses" value="2 / 10" note="Resets in 12h 46m" blue />
+          <Card
+  icon={<Zap />}
+  title="Today's Humanizations"
+  value={todayUsage}
+  note="Today's usage"
+  orange
+/>
+<Card
+  icon={<Clock />}
+  title="Remaining Uses"
+  value={`${10 - todayUsage} / 10`}
+  note="Resets tomorrow"
+  blue
+/>
         </section>
 
         <section style={mainGrid}>
@@ -111,25 +195,37 @@ export default function DashboardPage() {
               <button style={linkButton}>View all</button>
             </div>
 
-            {["Marketing Strategy Overview", "Product Launch Plan", "Blog Post - AI Humanization", "Academic Essay Draft"].map((doc, i) => (
-              <div key={i} style={docItem}>
-                <div style={docIcon}><FileText size={18} /></div>
-                <div style={{ flex: 1 }}>
-                  <b>{doc}</b>
-                  <p style={mutedSmall}>{[420, 780, 650, 1200][i]} words • {["2h ago", "5h ago", "1d ago", "2d ago"][i]}</p>
-                </div>
-                <MoreVertical size={18} />
-              </div>
-            ))}
+            {recentDocuments.map((doc) => (
+  <div key={doc.id} style={docItem}>
+    <div style={docIcon}>
+      <FileText size={18} />
+    </div>
+
+    <div style={{ flex: 1 }}>
+      <b>{doc.original_text?.slice(0, 35) || "Untitled"}</b>
+
+      <p style={mutedSmall}>
+        {doc.humanized_text?.trim().split(/\s+/).length || 0} words •{" "}
+        {new Date(doc.created_at).toLocaleDateString()}
+      </p>
+    </div>
+
+    <MoreVertical size={18} />
+  </div>
+))}  
           </div>
         </section>
 
         <section style={bottomGrid}>
           <div style={usageCard}>
-            <div style={circle}>80%</div>
+          <div style={circle}>
+  {Math.round((todayUsage / 10) * 100)}%
+</div>
             <div>
-              <h3>8 of 10 uses</h3>
-              <p style={mutedSmall}>You've used 8 of your 10 daily humanizations.</p>
+            <h3>{todayUsage} of 10 uses</h3>
+            <p style={mutedSmall}>
+You've used {todayUsage} of your 10 daily humanizations.
+</p>
               <p style={{ color: "#7c3aed", fontWeight: "bold" }}>Resets in 12h 46m</p>
             </div>
           </div>
@@ -171,15 +267,42 @@ function Card({ icon, title, value, note, green, orange, blue }: any) {
   );
 }
 
-const page = { minHeight: "100vh", display: "flex", background: "#f8fafc", color: "#0f172a", fontFamily: "Arial, sans-serif" };
-const sidebar = { width: "250px", background: "#fff", borderRight: "1px solid #e5e7eb", padding: "28px 20px", height: "100vh", position: "sticky" as const, top: 0, display: "flex", flexDirection: "column" as const };
+const page = {
+  minHeight: "100vh",
+  display: "flex",
+  background: "#f8fafc",
+  color: "#0f172a",
+  fontFamily: "Arial, sans-serif",
+};
+const loadingPage = {
+  ...page,
+  alignItems: "center",
+  justifyContent: "center",
+};
+const loadingText = { color: "#64748b", fontSize: "16px", margin: 0 };
+const sidebar = {
+  width: "250px",
+  background: "#fff",
+  borderRight: "1px solid #e5e7eb",
+  padding: "28px 20px",
+  height: "100vh",
+  position: "sticky" as const,
+  top: 0,
+  display: "flex",
+  flexDirection: "column" as const,
+};
 const logo = { fontSize: "26px", fontWeight: 800, marginBottom: "35px" };
 const nav = { display: "grid", gap: "10px" };
 const activeNav = { display: "flex", alignItems: "center", gap: "12px", padding: "14px 16px", borderRadius: "12px", border: "none", background: "#f3e8ff", color: "#7c3aed", fontWeight: "bold" as const, cursor: "pointer", fontSize: "15px" };
 const navItem = { ...activeNav, background: "transparent", color: "#334155" };
 const upgradeBox = { marginTop: "auto", background: "#faf5ff", border: "1px solid #eadcff", borderRadius: "16px", padding: "20px" };
 const upgradeButton = { padding: "12px 22px", borderRadius: "10px", border: "none", background: "linear-gradient(135deg,#8b5cf6,#7c3aed)", color: "white", fontWeight: "bold" as const, cursor: "pointer" };
-const content = { flex: 1, padding: "100px 36px 36px", maxWidth: "1250px", margin: "0 auto" };
+const content = {
+  flex: 1,
+  padding: "100px 36px 36px",
+  maxWidth: "1250px",
+  margin: "0 auto",
+};
 const topbar = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px" };
 const title = { fontSize: "34px", margin: 0 };
 const subtitle = { color: "#64748b", marginTop: "8px" };
@@ -187,10 +310,22 @@ const topActions = { display: "flex", alignItems: "center", gap: "18px" };
 const planBadge = { background: "#f3e8ff", color: "#7c3aed", padding: "9px 14px", borderRadius: "999px", fontWeight: "bold" as const };
 const usageBadge = { fontWeight: "bold" as const, color: "#334155" };
 const avatar = { width: "38px", height: "38px", borderRadius: "50%", background: "#7c3aed", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold" as const };
-const statsGrid = { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "20px", marginBottom: "24px" };
+
+const statsGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, 1fr)",
+  gap: "20px",
+  marginBottom: "24px",
+};
+
 const statCard = { background: "#fff", border: "1px solid #e5e7eb", borderRadius: "18px", padding: "24px", display: "flex", gap: "18px", alignItems: "center", boxShadow: "0 10px 25px rgba(15,23,42,0.05)" };
 const statIcon = { width: "54px", height: "54px", borderRadius: "14px", display: "flex", alignItems: "center", justifyContent: "center" };
-const mainGrid = { display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "24px", marginBottom: "24px" };
+const mainGrid = {
+  display: "grid",
+  gridTemplateColumns: "1.5fr 1fr",
+  gap: "24px",
+  marginBottom: "24px",
+};
 const chartCard = { background: "#fff", border: "1px solid #e5e7eb", borderRadius: "18px", padding: "24px" };
 const recentCard = { ...chartCard };
 const cardHeader = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" };
@@ -199,7 +334,12 @@ const linkButton = { border: "none", background: "transparent", color: "#7c3aed"
 const chartBox = { height: "320px", background: "linear-gradient(180deg,#ffffff,#faf5ff)", borderRadius: "14px", padding: "10px" };
 const docItem = { display: "flex", alignItems: "center", gap: "14px", padding: "14px 0", borderBottom: "1px solid #e5e7eb" };
 const docIcon = { width: "40px", height: "40px", borderRadius: "10px", background: "#f3e8ff", color: "#7c3aed", display: "flex", alignItems: "center", justifyContent: "center" };
-const bottomGrid = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" };
+const bottomGrid = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "24px",
+};
+    
 const usageCard = { ...chartCard, display: "flex", alignItems: "center", gap: "26px" };
 const planCard = { ...chartCard };
 const circle = { width: "90px", height: "90px", borderRadius: "50%", border: "12px solid #8b5cf6", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold" as const, fontSize: "22px" };

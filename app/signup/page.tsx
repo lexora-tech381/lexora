@@ -1,9 +1,63 @@
 "use client";
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { User, Mail, Lock, ArrowLeft, ShieldCheck } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 export default function SignupPage() {
   const router = useRouter();
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  async function handleSignUp(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setSuccessMessage(null);
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    if (!termsAccepted) {
+      setError("Please accept the Terms of Service and Privacy Policy.");
+      return;
+    }
+
+    setLoading(true);
+
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+        },
+      },
+    });
+
+    setLoading(false);
+
+    if (signUpError) {
+      setError(signUpError.message);
+      return;
+    }
+
+    if (data.session) {
+      router.push("/dashboard");
+      return;
+    }
+
+    setSuccessMessage(
+      "Account created. Check your email to confirm your account before signing in.",
+    );
+  }
 
   return (
     <main style={page}>
@@ -71,41 +125,78 @@ export default function SignupPage() {
           Join Lexora AI and start humanizing your content in seconds.
         </p>
 
+        <form onSubmit={handleSignUp}>
         <label style={label}>Full Name</label>
         <div style={inputWithIcon}>
           <User size={18} color="#64748b" />
-          <input placeholder="Enter your full name" style={innerInput} />
+          <input
+            placeholder="Enter your full name"
+            style={innerInput}
+            value={fullName}
+            onChange={(event) => setFullName(event.target.value)}
+            required
+          />
         </div>
 
         <label style={label}>Email Address</label>
         <div style={inputWithIcon}>
           <Mail size={18} color="#64748b" />
-          <input placeholder="Enter your email" style={innerInput} />
+          <input
+            type="email"
+            placeholder="Enter your email"
+            style={innerInput}
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
+          />
         </div>
 
         <label style={label}>Password</label>
         <div style={inputWithIcon}>
           <Lock size={18} color="#64748b" />
-          <input type="password" placeholder="Create a password" style={innerInput} />
+          <input
+            type="password"
+            placeholder="Create a password"
+            style={innerInput}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+          />
         </div>
 
         <label style={label}>Confirm Password</label>
         <div style={inputWithIcon}>
           <Lock size={18} color="#64748b" />
-          <input type="password" placeholder="Confirm your password" style={innerInput} />
+          <input
+            type="password"
+            placeholder="Confirm your password"
+            style={innerInput}
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            required
+          />
         </div>
 
         <label style={terms}>
-          <input type="checkbox" />
+          <input
+            type="checkbox"
+            checked={termsAccepted}
+            onChange={(event) => setTermsAccepted(event.target.checked)}
+          />
           I agree to the Terms of Service and Privacy Policy.
         </label>
 
+        {error ? <p style={errorText}>{error}</p> : null}
+        {successMessage ? <p style={successText}>{successMessage}</p> : null}
+
         <button
-          onClick={() => router.push("/dashboard")}
+          type="submit"
+          disabled={loading}
           style={buttonStyle}
         >
-          Create Account
+          {loading ? "Creating Account..." : "Create Account"}
         </button>
+        </form>
 
         <div style={securityNote}>
           <ShieldCheck size={16} />
@@ -262,4 +353,20 @@ const headerSub = {
   fontSize: "13px",
   color: "#7c3aed",
   fontWeight: "bold" as const,
+};
+
+const errorText = {
+  marginTop: "18px",
+  marginBottom: 0,
+  color: "#dc2626",
+  fontSize: "14px",
+  textAlign: "center" as const,
+};
+
+const successText = {
+  marginTop: "18px",
+  marginBottom: 0,
+  color: "#059669",
+  fontSize: "14px",
+  textAlign: "center" as const,
 };

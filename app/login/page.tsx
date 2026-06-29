@@ -1,10 +1,39 @@
 "use client";
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 import { Mail, Lock, ArrowLeft, ShieldCheck } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    setLoading(false);
+
+    if (signInError) {
+      setError(signInError.message);
+      return;
+    }
+
+    if (data.session) {
+      router.push("/dashboard");
+    }
+  }
+
   return (
     <main style={page}>
       <button onClick={() => router.push("/")} style={backButton}>
@@ -78,16 +107,31 @@ export default function LoginPage() {
         <h1 style={title}>Welcome back</h1>
         <p style={subtitle}>Sign in to continue using your Lexora workspace.</p>
 
+        <form onSubmit={handleLogin}>
         <label style={label}>Email Address</label>
         <div style={inputWithIcon}>
           <Mail size={18} color="#64748b" />
-          <input placeholder="Enter your email" style={innerInput} />
+          <input
+            type="email"
+            placeholder="Enter your email"
+            style={innerInput}
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
+          />
         </div>
 
         <label style={label}>Password</label>
         <div style={inputWithIcon}>
           <Lock size={18} color="#64748b" />
-          <input type="password" placeholder="Enter your password" style={innerInput} />
+          <input
+            type="password"
+            placeholder="Enter your password"
+            style={innerInput}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+          />
         </div>
 
         <div style={row}>
@@ -98,9 +142,12 @@ export default function LoginPage() {
           <a href="#" style={link}>Forgot password?</a>
         </div>
 
-        <button onClick={() => router.push("/dashboard")} style={buttonStyle}>
-          Login
+        {error ? <p style={errorText}>{error}</p> : null}
+
+        <button type="submit" disabled={loading} style={buttonStyle}>
+          {loading ? "Logging in..." : "Login"}
         </button>
+        </form>
 
         <div style={securityNote}>
           <ShieldCheck size={16} />
@@ -257,4 +304,12 @@ const bottomText = {
   textAlign: "center" as const,
   color: "#64748b",
   marginTop: "24px",
+};
+
+const errorText = {
+  marginTop: "18px",
+  marginBottom: 0,
+  color: "#dc2626",
+  fontSize: "14px",
+  textAlign: "center" as const,
 };

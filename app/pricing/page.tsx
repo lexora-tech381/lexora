@@ -86,7 +86,15 @@ export default function PricingPage() {
           <span style={heroBadge}><Star size={16} /> Flexible Pricing</span>
           <h1 style={title}>Simple pricing for better writing</h1>
           <p style={subtitle}>Choose the plan that helps you humanize AI text faster, more naturally, and more professionally.</p>
-
+          <p
+  style={{
+    color: "#7c3aed",
+    fontWeight: "bold",
+    marginTop: "10px",
+  }}
+>
+  🚀 Paid subscriptions are coming soon. You can explore all plans today.
+</p>
           <div style={toggleWrapper}>
             <button onClick={() => setBilling("monthly")} style={billing === "monthly" ? activeToggle : inactiveToggle}>Monthly</button>
             <button onClick={() => setBilling("yearly")} style={billing === "yearly" ? activeToggle : inactiveToggle}>Yearly</button>
@@ -113,11 +121,11 @@ export default function PricingPage() {
               </div>
 
               <button
-  onClick={() => router.push(plan.path)}
+  onClick={() => alert("Subscriptions are coming soon!")}
   style={plan.popular ? popularButton : planButton}
 >
-                {plan.button}
-              </button>
+  {plan.name === "Free" ? "Current Plan" : "Coming Soon"}
+</button>
             </div>
           ))}
         </section>

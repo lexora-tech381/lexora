@@ -1,5 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 import {
   LayoutDashboard,
@@ -19,7 +21,45 @@ import {
 
 export default function SettingsPage() {
   const router = useRouter();
-  return (
+  const [fullName, setFullName] = useState("");
+const [email, setEmail] = useState("");
+const [saving, setSaving] = useState(false);
+useEffect(() => {
+  const loadUser = async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      router.push("/login");
+      return;
+    }
+
+    setEmail(session.user.email || "");
+    setFullName(session.user.user_metadata?.full_name || "");
+  };
+
+  loadUser();
+}, [router]);
+const saveProfile = async () => {
+  setSaving(true);
+
+  const { error } = await supabase.auth.updateUser({
+    data: {
+      full_name: fullName,
+    },
+  });
+
+  setSaving(false);
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  alert("Settings saved successfully!");
+};
+return (
     <main style={page}>
       <aside style={sidebar}>
         <h2 style={logo}>Lexora</h2>
@@ -49,8 +89,8 @@ export default function SettingsPage() {
             <p style={subtitle}>Manage your account preferences and Lexora experience.</p>
           </div>
 
-          <button onClick={() => alert("Settings saved successfully!")} style={saveButton}>
-            <Save size={18} /> Save Changes
+          <button onClick={saveProfile} style={saveButton}>
+          <Save size={18} /> {saving ? "Saving..." : "Save Changes"}
           </button>
         </header>
 
@@ -63,10 +103,19 @@ export default function SettingsPage() {
               </div>
 
               <label style={label}>Full Name</label>
-              <input style={input} defaultValue="Christina" />
+              <input
+  style={input}
+  value={fullName}
+  onChange={(e) => setFullName(e.target.value)}
+  placeholder="Enter your full name"
+/>
 
               <label style={label}>Email Address</label>
-              <input style={input} defaultValue="christina@example.com" />
+              <input
+  style={input}
+  value={email}
+  disabled
+/>
 
               <label style={label}>Role</label>
               <select style={input}>

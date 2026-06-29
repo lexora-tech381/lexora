@@ -1,5 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 import {
   LayoutDashboard,
@@ -20,12 +22,81 @@ import {
 
 export default function DocumentsPage() {
   const router = useRouter();
-  const documents = [
-    { title: "Marketing Strategy Overview", words: "420 words", date: "2h ago", mode: "Creative" },
-    { title: "Product Launch Plan", words: "780 words", date: "5h ago", mode: "Professional" },
-    { title: "Blog Post - AI Humanization", words: "650 words", date: "1d ago", mode: "Natural" },
-    { title: "Academic Essay Draft", words: "1,200 words", date: "2d ago", mode: "Academic" },
-  ];
+  const [documents, setDocuments] = useState<any[]>([]);
+const [loading, setLoading] = useState(true);
+
+useEffect(() => {
+  const loadDocuments = async () => {
+    const { data, error } = await supabase
+      .from("documents")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.log("Documents load error:", error);
+    } else {
+      setDocuments(data || []);
+    }
+
+    setLoading(false);
+  };
+
+  loadDocuments();
+}, []);
+const deleteDocument = async (id: string) => {
+  const confirmDelete = confirm("Delete this document?");
+  if (!confirmDelete) return;
+
+  const { error } = await supabase
+    .from("documents")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  setDocuments((prev) => prev.filter((doc) => doc.id !== id));
+};
+
+const viewDocument = (doc: any) => {
+  alert(doc.humanized_text || "No content found.");
+};
+
+const downloadDocument = (doc: any) => {
+  const content = doc.humanized_text || "";
+  const blob = new Blob([content], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "lexora-document.txt";
+  a.click();
+
+  URL.revokeObjectURL(url);
+};
+const renameDocument = async (id: string, currentTitle: string) => {
+  const newTitle = prompt("Enter new document name:", currentTitle);
+
+  if (!newTitle || !newTitle.trim()) return;
+
+  const { error } = await supabase
+    .from("documents")
+    .update({ title: newTitle.trim() })
+    .eq("id", id);
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  setDocuments((prev) =>
+    prev.map((doc) =>
+      doc.id === id ? { ...doc, title: newTitle.trim() } : doc
+    )
+  );
+};
 
   return (
     <main style={page}>
@@ -92,28 +163,61 @@ export default function DocumentsPage() {
             <span>Actions</span>
           </div>
 
-          {documents.map((doc, index) => (
+          {loading ? (
+  <div style={{ padding: "24px" }}>Loading documents...</div>
+) : documents.length === 0 ? (
+  <div style={{ padding: "24px" }}>No documents saved yet.</div>
+) : (
+  documents.map((doc, index) => (
             <div key={index} style={docRow}>
               <div style={docTitle}>
                 <div style={docIcon}><FileText size={18} /></div>
                 <div>
-                  <b>{doc.title}</b>
+                <b>{doc.title || doc.original_text?.slice(0, 35) || "Humanized Document"}</b>
                   <p style={mutedSmall}>Humanized document</p>
                 </div>
               </div>
 
-              <span style={modeBadge}>{doc.mode}</span>
-              <span>{doc.words}</span>
-              <span style={mutedSmall}>{doc.date}</span>
+              <span style={modeBadge}>Natural</span>
+              <span>{doc.humanized_text?.trim().split(/\s+/).length || 0} words</span>
+              <span style={mutedSmall}>
+  {new Date(doc.created_at).toLocaleDateString()}
+</span>
 
-              <div style={actions}>
-                <button style={iconButton}><Eye size={17} /></button>
-                <button style={iconButton}><Download size={17} /></button>
-                <button style={deleteButton}><Trash2 size={17} /></button>
-                <MoreVertical size={18} />
-              </div>
+<button
+  onClick={() => renameDocument(doc.id, doc.title || "Humanized Document")}
+  style={iconButton}
+>
+  Rename
+</button>
+
+<div style={actions}>
+  <button
+    onClick={() => viewDocument(doc)}
+    style={iconButton}
+  >
+    <Eye size={17} />
+  </button>
+
+  <button
+    onClick={() => downloadDocument(doc)}
+    style={iconButton}
+  >
+    <Download size={17} />
+  </button>
+
+  <button
+    onClick={() => deleteDocument(doc.id)}
+    style={deleteButton}
+  >
+    <Trash2 size={17} />
+  </button>
+
+  <MoreVertical size={18} />
+</div>
             </div>
-          ))}
+          ))
+        )}
         </section>
       </section>
     </main>

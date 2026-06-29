@@ -1,5 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 import {
   LayoutDashboard,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { useEffect, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
 
 export default function Home() {
   const router = useRouter();
@@ -21,11 +23,61 @@ export default function Home() {
   const [uses, setUses] = useState(0);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
 
   useEffect(() => {
-    const savedUses = localStorage.getItem("lexora_uses");
-    if (savedUses) setUses(Number(savedUses));
+    const loadSessionAndUsage = async () => {
+      const {
+        data: { session: currentSession },
+      } = await supabase.auth.getSession();
+  
+      setSession(currentSession);
+      setCheckingSession(false);
+  
+      if (currentSession) {
+        const today = new Date().toISOString().split("T")[0];
+  
+        const { data, error } = await supabase
+          .from("usage")
+          .select("count")
+          .eq("user_id", currentSession.user.id)
+          .eq("date", today)
+          .maybeSingle();
+  
+        if (error) {
+          console.log("Usage load error:", error);
+        }
+  
+        setUses(data?.count || 0);
+      }
+    };
+  
+    loadSessionAndUsage();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, currentSession) => {
+      setSession(currentSession);
+      setCheckingSession(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  function getUserInitial(user: Session["user"]) {
+    const fullName = user.user_metadata?.full_name;
+    if (typeof fullName === "string" && fullName.trim()) {
+      return fullName.trim().charAt(0).toUpperCase();
+    }
+
+    if (user.email) {
+      return user.email.charAt(0).toUpperCase();
+    }
+
+    return "U";
+  }
 
   const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
   const charCount = text.length;
@@ -39,12 +91,28 @@ export default function Home() {
       return;
     }
 
-    if (uses >= 10) {
+    let activeSession = session;
+
+    if (!activeSession) {
+      const {
+        data: { session: currentSession },
+      } = await supabase.auth.getSession();
+      activeSession = currentSession;
+      setSession(currentSession);
+    }
+
+    if (!activeSession) {
+      router.push("/login");
+      return;
+    }
+
+    if (uses >=10) {
       setResult("You have reached your free limit of 10 humanizations today.");
       return;
     }
 
     setLoading(true);
+    setSaveError(null);
 
     try {
       const response = await fetch("/api/humanize", {
@@ -53,17 +121,86 @@ export default function Home() {
         body: JSON.stringify({ text, mode }),
       });
 
-      const data = await response.json();
-      setResult(data.result || data.text || "Unable to humanize text.");
+const humanizeData = await response.json();
+if (!response.ok) {
+  setResult(humanizeData.error || "Unable to humanize text.");
+  setLoading(false);
+  return;
+}
+
+const humanizedText =
+  humanizeData.result || humanizeData.text || "Unable to humanize text.";
+      setResult(humanizedText);
+
+      console.log("=== SAVE DEBUG ===");
+      console.log("Session:", activeSession);
+      console.log("User ID:", activeSession?.user?.id);
+      console.log("Original text:", text);
+      console.log("Humanized text:", humanizedText);
+      
+      const { data, error: insertError } = await supabase
+        .from("documents")
+        .insert({
+          user_id: activeSession.user.id,
+          original_text: text,
+          humanized_text: humanizedText,
+        })
+        .select();
+      
+      console.log("Insert data:", data);
+      console.log("Insert error:", insertError);
+      
+      if (insertError) {
+        console.log(insertError);
+        alert(insertError.message);
+      }
+
+      const today = new Date().toISOString().split("T")[0];
+
+const { data: existingUsage } = await supabase
+  .from("usage")
+  .select("*")
+  .eq("user_id", activeSession.user.id)
+  .eq("date", today)
+  .maybeSingle();
+  console.log("Existing usage:", existingUsage);
+
+if (!existingUsage) {
+  const { error: usageInsertError } = await supabase
+  .from("usage")
+  .insert({
+    user_id: activeSession.user.id,
+    date: today,
+    count: 1,
+  });
+
+console.log("Usage insert error:", usageInsertError);
+
+  setUses(1);
+} else {
+  const updatedCount = existingUsage.count + 1;
+
+  await supabase
+    .from("usage")
+    .update({ count: updatedCount })
+    .eq("id", existingUsage.id);
+
+  setUses(updatedCount);
+}
+const { data: latestUsage } = await supabase
+  .from("usage")
+  .select("count")
+  .eq("user_id", activeSession.user.id)
+  .eq("date", today)
+  .maybeSingle();
+
+setUses(latestUsage?.count || 0);
     } catch {
       setResult(
         "This is a clearer and more natural version of your text. The meaning is kept the same, but the wording is smoother and easier to read."
       );
     }
 
-    const newUses = uses + 1;
-    setUses(newUses);
-    localStorage.setItem("lexora_uses", String(newUses));
     setLoading(false);
   };
 
@@ -123,7 +260,7 @@ export default function Home() {
     Dashboard
   </button>
 
-  <button onClick={() => ( "/documents")} style={navItem}>
+  <button onClick={() => router.push("/documents")} style={navItem}>
     <FileText size={18} />
     Documents
   </button>
@@ -217,19 +354,27 @@ export default function Home() {
     <span style={planBadge}>★ Free Plan</span>
     <span style={usageBadge}>{uses} / 10 uses</span>
 
-    <button
-      onClick={() => (router.push("/login"))}
-      style={smallButton}
-    >
-      Login
-    </button>
+    {checkingSession ? (
+      <span style={sessionLoadingText}>Checking session...</span>
+    ) : session ? (
+      <div style={avatar}>{getUserInitial(session.user)}</div>
+    ) : (
+      <>
+        <button
+          onClick={() => router.push("/login")}
+          style={smallButton}
+        >
+          Login
+        </button>
 
-    <button
-      onClick={() => (router.push("/signup"))}
-      style={purpleSmall}
-    >
-      Sign Up
-    </button>
+        <button
+          onClick={() => router.push("/signup")}
+          style={purpleSmall}
+        >
+          Sign Up
+        </button>
+      </>
+    )}
   </div>
 </header>
 <div style={heroSection}>
@@ -324,6 +469,7 @@ export default function Home() {
           </div>
 
           {copied && <p style={copiedText}>✓ Copied!</p>}
+          {saveError ? <p style={saveErrorText}>{saveError}</p> : null}
 </section>
 
 <div style={landingArea}>
@@ -424,6 +570,54 @@ export default function Home() {
   </footer>
 </div>
 </section>
+<style jsx global>{`
+  @media (max-width: 900px) {
+    main {
+      flex-direction: column !important;
+    }
+
+    aside {
+      width: auto !important;
+      min-width: 0 !important;
+      height: auto !important;
+      position: relative !important;
+      border-right: none !important;
+      border-bottom: 1px solid #e5e7eb !important;
+    }
+
+    nav {
+      display: grid !important;
+      grid-template-columns: repeat(2, 1fr) !important;
+      gap: 8px !important;
+    }
+
+    section {
+      max-width: 100% !important;
+    }
+
+    textarea {
+      height: 260px !important;
+    }
+  }
+
+  @media (max-width: 700px) {
+    h1 {
+      font-size: 34px !important;
+    }
+
+    h2 {
+      font-size: 22px !important;
+    }
+
+    button {
+      font-size: 13px !important;
+    }
+
+    div {
+      max-width: 100% !important;
+    }
+  }
+`}</style>
 </main>
   );
 }
@@ -577,6 +771,24 @@ const purpleSmall = {
   background: "linear-gradient(135deg,#8b5cf6,#7c3aed)",
   color: "white",
   border: "none",
+};
+
+const avatar = {
+  width: "38px",
+  height: "38px",
+  borderRadius: "50%",
+  background: "#7c3aed",
+  color: "white",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontWeight: "bold" as const,
+};
+
+const sessionLoadingText = {
+  color: "#64748b",
+  fontSize: "13px",
+  whiteSpace: "nowrap" as const,
 };
 
 const toolCard = {
@@ -773,6 +985,13 @@ const copiedText = {
   color: "#22c55e",
   textAlign: "center" as const,
   marginTop: "12px",
+};
+
+const saveErrorText = {
+  color: "#dc2626",
+  textAlign: "center" as const,
+  marginTop: "12px",
+  fontSize: "14px",
 };
 
 const mutedSmall = {
