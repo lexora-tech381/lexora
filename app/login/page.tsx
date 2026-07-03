@@ -139,7 +139,34 @@ export default function LoginPage() {
             <input type="checkbox" /> Remember me
           </label>
 
-          <a href="#" style={link}>Forgot password?</a>
+          <button
+  type="button"
+  onClick={async () => {
+    if (!email) {
+      setError("Please enter your email address first.");
+      return;
+    }
+
+    setError(null);
+    setLoading(true);
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: "https://lexora-ai-smoky.vercel.app/reset-password",
+    });
+
+    setLoading(false);
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+
+    alert("Password reset link sent. Please check your email.");
+  }}
+  style={forgotButton}
+>
+  Forgot password?
+</button>
         </div>
 
         {error ? <p style={errorText}>{error}</p> : null}
@@ -312,4 +339,13 @@ const errorText = {
   color: "#dc2626",
   fontSize: "14px",
   textAlign: "center" as const,
+};const forgotButton = {
+  border: "none",
+  background: "transparent",
+  color: "#7c3aed",
+  textDecoration: "none",
+  fontWeight: "bold" as const,
+  cursor: "pointer",
+  padding: 0,
+  fontSize: "14px",
 };
