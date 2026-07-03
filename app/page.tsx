@@ -26,7 +26,14 @@ export default function Home() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
-
+  const [isMobile, setIsMobile] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    const checkScreen = () => setIsMobile(window.innerWidth < 768);
+    checkScreen();
+    window.addEventListener("resize", checkScreen);
+    return () => window.removeEventListener("resize", checkScreen);
+  }, []);
   useEffect(() => {
     const loadSessionAndUsage = async () => {
       const {
@@ -242,14 +249,34 @@ setUses(latestUsage?.count || 0);
   };
 
   return (
-    <main style={page}>
-      <aside style={sidebar}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+    <main style={{ ...page, flexDirection: isMobile ? "column" : "row" }}>
+    <aside
+  style={{
+    ...sidebar,
+    display: isMobile ? "none" : "flex",
+    width: isMobile ? "100%" : "270px",
+    minWidth: isMobile ? "0" : "250px",
+    height: isMobile ? "auto" : "100vh",
+    position: isMobile ? "relative" : "sticky",
+    borderRight: isMobile ? "none" : "1px solid #e5e7eb",
+    borderBottom: isMobile ? "1px solid #e5e7eb" : "none",
+  }}
+>
+<div
+  style={{
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    width: "100%",
+    position: "relative",
+    zIndex: 10001,
+  }}
+>
   
   <h2 style={logo}>Lexora</h2>
 </div>
 
-<nav style={nav}>
+<nav style={{ ...nav, gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "1fr" }}>
   <button style={activeNav}>
     <PenSquare size={18} />
     Humanizer
@@ -295,90 +322,131 @@ setUses(latestUsage?.count || 0);
         </div>
       </aside>
 
-      <section style={content}>
-      <header style={topbar}>
-      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-  
-  <div
+      <section
   style={{
-    display: "flex",
-    alignItems: "center",
+    ...content,
+    width: "100%",
+maxWidth: "100%",
+padding: isMobile ? "90px 16px 20px" : "110px 32px 32px",
+overflowX: "hidden",
+  }}
+>
+
+
+<header
+  style={{
+    ...topbar,
+    position: "fixed",
+    top: 0,
+    left: isMobile ? 0 : "270px",
+    right: 0,
+    zIndex: 9999,
+    background: "#f8fafc",
+    padding: isMobile ? "12px 16px" : "8px 0",
+    flexDirection: "column",
+    alignItems: "stretch",
     gap: "12px",
-    position: "relative",
+    pointerEvents: "auto",
   }}
 >
-  <div
-  style={{
-    width: "56px",
-    height: "56px",
-    background: "linear-gradient(135deg,#5b21b6,#c084fc)",
-    clipPath: "polygon(25% 6%,75% 6%,100% 50%,75% 94%,25% 94%,0% 50%)",
-    position: "relative",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  }}
->
-  <div
-    style={{
-      width: "22px",
-      height: "30px",
-      borderLeft: "8px solid white",
-      borderBottom: "8px solid white",
-      borderBottomLeftRadius: "10px",
-      transform: "translateY(-2px)",
-    }}
-  />
+  <div style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%" }}>
+    {isMobile && (
+      <button onClick={() => setMenuOpen(!menuOpen)} style={menuButton}>
+        ☰
+      </button>
+    )}
 
-  <span
-  style={{
-    position: "absolute",
-    top: "-14px",
-    right: "-16px",
-    color: "#a855f7",
-    fontSize: "28px",
-    fontWeight: "bold",
-    zIndex: 999,
-  }}
->
-  ✦
-</span>
-  
-</div>
+    <div
+      style={{
+        width: "46px",
+        height: "46px",
+        background: "linear-gradient(135deg,#5b21b6,#c084fc)",
+        clipPath: "polygon(25% 6%,75% 6%,100% 50%,75% 94%,25% 94%,0% 50%)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <div
+        style={{
+          width: "18px",
+          height: "24px",
+          borderLeft: "7px solid white",
+          borderBottom: "7px solid white",
+          borderBottomLeftRadius: "8px",
+        }}
+      />
+    </div>
 
-  <h2 style={headerLogo}>Lexora</h2>
-</div>
-</div>
+    <h2 style={headerLogo}>Lexora</h2>
 
-  <div style={topActions}>
+    <div style={{ marginLeft: "auto", display: "flex", gap: "8px" }}>
+  {session ? (
+    <div style={avatar}>{getUserInitial(session.user)}</div>
+  ) : (
+    <>
+      <button
+        onClick={() => router.push("/login")}
+        style={smallButton}
+      >
+        Login
+      </button>
+
+      <button
+        onClick={() => router.push("/signup")}
+        style={{
+          ...purpleSmall,
+          width: "auto",
+          marginTop: 0,
+          padding: "10px 16px",
+        }}
+      >
+        Sign Up
+      </button>
+    </>
+  )}
+</div>
+  </div>
+
+  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
     <span style={planBadge}>★ Free Plan</span>
     <span style={usageBadge}>{uses} / 10 uses</span>
-
-    {checkingSession ? (
-      <span style={sessionLoadingText}>Checking session...</span>
-    ) : session ? (
-      <div style={avatar}>{getUserInitial(session.user)}</div>
-    ) : (
-      <>
-        <button
-          onClick={() => router.push("/login")}
-          style={smallButton}
-        >
-          Login
-        </button>
-
-        <button
-          onClick={() => router.push("/signup")}
-          style={purpleSmall}
-        >
-          Sign Up
-        </button>
-      </>
-    )}
   </div>
+
+  
 </header>
+{isMobile && menuOpen && (
+  <div style={mobileMenu}>
+<button
+  onClick={() => {
+    setMenuOpen(false);
+    router.push("/dashboard");
+  }}
+  style={mobileMenuItem}
+>
+  Dashboard
+</button>
+<button
+  onClick={() => {
+    setMenuOpen(false);
+    router.push("/");
+  }}
+  style={mobileMenuItem}
+>
+  Humanizer
+</button>
+    <button onClick={() => router.push("/documents")} style={mobileMenuItem}>Documents</button>
+    <button onClick={() => router.push("/usage")} style={mobileMenuItem}>Usage</button>
+    <button onClick={() => router.push("/pricing")} style={mobileMenuItem}>Pricing</button>
+    <button onClick={() => router.push("/settings")} style={mobileMenuItem}>Settings</button>
+    <button onClick={() => router.push("/support")} style={mobileMenuItem}>Support</button>
+  </div>
+)}
+
 <div style={heroSection}>
-  <h1 style={title}>Humanize AI Text</h1>
+<h1 style={{ ...title, fontSize: isMobile ? "34px" : "52px" }}>
+  Humanize AI Text
+</h1>
 
   <p style={subtitle}>
     Rewrite AI-generated content into clear, natural, human-like writing.
@@ -386,7 +454,7 @@ setUses(latestUsage?.count || 0);
 </div>
 
         <section style={toolCard}>
-          <div style={controlsRow}>
+        <div style={{ ...controlsRow, gridTemplateColumns: isMobile ? "1fr" : "1fr 220px" }}>
             <div>
               <p style={label}>CHOOSE MODE</p>
               <div style={buttonGroup}>
@@ -419,7 +487,7 @@ setUses(latestUsage?.count || 0);
             <span style={secure}>✓ Secure & Private</span>
           </div>
 
-          <div style={panels}>
+          <div style={{ ...panels, gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr" }}>
             <div style={panel}>
               <div style={panelHeader}>
                 <h3 style={panelTitle}>Your AI Text</h3>
@@ -454,7 +522,13 @@ setUses(latestUsage?.count || 0);
             </div>
           </div>
 
-          <div style={mainActionRow}>
+          <div
+  style={{
+    ...mainActionRow,
+    flexDirection: isMobile ? "column" : "row",
+    alignItems: "stretch",
+  }}
+>
             <button onClick={humanizeText} style={humanizeButton}>
               {loading ? "Humanizing..." : "✦ Humanize Text"}
             </button>
@@ -472,14 +546,31 @@ setUses(latestUsage?.count || 0);
           {saveError ? <p style={saveErrorText}>{saveError}</p> : null}
 </section>
 
-<div style={landingArea}>
+<div
+  style={{
+    ...landingArea,
+    width: isMobile ? "100%" : "calc(100% + 64px)",
+    marginLeft: isMobile ? "0" : "-32px",
+    marginRight: isMobile ? "0" : "-32px",
+    padding: isMobile ? "35px 16px" : "55px 45px",
+  }}
+>
   <section>
     <h2 style={sectionTitle}>How Lexora Works</h2>
     <p style={sectionSubtitle}>
       Transform AI-generated content in four simple steps.
     </p>
 
-    <div style={fourGrid}>
+    <div
+  style={{
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "repeat(4, 1fr)",
+    gap: isMobile ? "16px" : "24px",
+    width: "100%",
+    maxWidth: "100%",
+  }}
+>
+  
       <div style={featureCard}>📝<h3>Paste Text</h3><p style={mutedSmall}>Paste AI-generated content into the editor.</p></div>
       <div style={featureCard}>⚙️<h3>Choose Mode</h3><p style={mutedSmall}>Select the rewriting style that fits your needs.</p></div>
       <div style={featureCard}>✨<h3>Humanize</h3><p style={mutedSmall}>Convert robotic AI writing into natural language.</p></div>
@@ -491,7 +582,14 @@ setUses(latestUsage?.count || 0);
     <h2 style={sectionTitle}>Why Choose Lexora?</h2>
     <p style={sectionSubtitle}>Built to make writing clearer, natural, and professional.</p>
 
-    <div style={fourGrid}>
+    <div
+  style={{
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "repeat(4, 1fr)",
+    gap: "16px",
+    width: "100%",
+  }}
+>
       <div style={featureCard}>🛡️<h3>Advanced Humanization</h3><p style={mutedSmall}>Makes AI content sound natural and human-written.</p></div>
       <div style={featureCard}>💜<h3>Multiple Modes</h3><p style={mutedSmall}>Use Free, Fast, Creative, and Enhanced modes.</p></div>
       <div style={featureCard}>🔒<h3>Private & Secure</h3><p style={mutedSmall}>Your content is never shared publicly.</p></div>
@@ -499,7 +597,14 @@ setUses(latestUsage?.count || 0);
     </div>
   </section>
 
-  <section style={lastSection}>
+  <section
+  style={{
+    ...lastSection,
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "1fr 1.2fr 1fr",
+    gap: isMobile ? "18px" : "28px",
+  }}
+>
     <div style={testimonialBox}>
       <h3>What Our Users Say</h3>
 
@@ -519,7 +624,7 @@ setUses(latestUsage?.count || 0);
     <div style={pricingBox}>
   <h3 style={{ textAlign: "center", marginTop: 0 }}>Pricing Made Simple</h3>
 
-  <div style={pricingCards}>
+  <div style={{ ...pricingCards, gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr" }}>
     <div style={priceCard}>
       <h3>Free Plan</h3>
       <h2>$0 <span style={priceSmall}>/ month</span></h2>
@@ -570,54 +675,6 @@ setUses(latestUsage?.count || 0);
   </footer>
 </div>
 </section>
-<style jsx global>{`
-  @media (max-width: 900px) {
-    main {
-      flex-direction: column !important;
-    }
-
-    aside {
-      width: auto !important;
-      min-width: 0 !important;
-      height: auto !important;
-      position: relative !important;
-      border-right: none !important;
-      border-bottom: 1px solid #e5e7eb !important;
-    }
-
-    nav {
-      display: grid !important;
-      grid-template-columns: repeat(2, 1fr) !important;
-      gap: 8px !important;
-    }
-
-    section {
-      max-width: 100% !important;
-    }
-
-    textarea {
-      height: 260px !important;
-    }
-  }
-
-  @media (max-width: 700px) {
-    h1 {
-      font-size: 34px !important;
-    }
-
-    h2 {
-      font-size: 22px !important;
-    }
-
-    button {
-      font-size: 13px !important;
-    }
-
-    div {
-      max-width: 100% !important;
-    }
-  }
-`}</style>
 </main>
   );
 }
@@ -708,16 +765,12 @@ const content = {
 };
 
 const topbar = {
-  position: "sticky" as const,
-  top: 0,
-  zIndex: 1000,
   background: "#f8fafc",
-  padding: "18px 0",
+  padding: "8px 0",
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
 };
-
 
 const title = {
   fontSize: "52px",
@@ -757,7 +810,7 @@ const usageBadge = {
 };
 
 const smallButton = {
-  padding: "10px 17px",
+  padding: "8px 12px",
   borderRadius: "10px",
   border: "1px solid #e5e7eb",
   background: "#ffffff",
@@ -1003,13 +1056,15 @@ const featureCard = {
   background: "#ffffff",
   border: "1px solid #e5e7eb",
   borderRadius: "18px",
-  padding: "28px",
+  padding: "24px",
   textAlign: "center" as const,
   boxShadow: "0 8px 20px rgba(15,23,42,0.06)",
   minHeight: "155px",
   display: "flex",
   flexDirection: "column" as const,
   justifyContent: "center",
+  width: "100%",
+  boxSizing: "border-box" as const,
 };
 const sectionBlock = {
   marginTop: "70px",
@@ -1033,6 +1088,7 @@ const fourGrid = {
   gap: "24px",
   maxWidth: "1180px",
   margin: "0 auto",
+  width: "100%",
 };
 
 const featureCard2 = {
@@ -1219,7 +1275,7 @@ const headerLogo = {
 
 const heroSection = {
   textAlign: "center" as const,
-  padding: "45px 20px 60px",
+  padding: "20px 20px 35px",
 };
 
 const heroTitle = {
@@ -1234,4 +1290,42 @@ const heroDescription = {
   fontSize: "22px",
   color: "#64748b",
   marginTop: "18px",
+};
+const menuButton = {
+  width: "40px",
+  height: "40px",
+  borderRadius: "12px",
+  border: "1px solid #e5e7eb",
+  background: "#ffffff",
+  fontSize: "22px",
+  cursor: "pointer",
+  position: "relative" as const,
+  zIndex: 10001,
+  pointerEvents: "auto" as const,
+};
+
+const mobileMenu = {
+  position: "fixed" as const,
+  top: "92px",
+  left: "12px",
+  right: "12px",
+  zIndex: 99999,
+  background: "#ffffff",
+  border: "1px solid #e5e7eb",
+  borderRadius: "18px",
+  padding: "14px",
+  display: "grid",
+  gap: "10px",
+  boxShadow: "0 18px 40px rgba(15,23,42,0.18)",
+};
+
+const mobileMenuItem = {
+  padding: "12px",
+  borderRadius: "12px",
+  border: "none",
+  background: "#f8fafc",
+  color: "#0f172a",
+  fontWeight: "bold" as const,
+  textAlign: "left" as const,
+  cursor: "pointer",
 };
