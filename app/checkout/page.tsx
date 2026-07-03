@@ -1,9 +1,18 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Lock, CreditCard, ShieldCheck, ArrowLeft } from "lucide-react";
 
 export default function CheckoutPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: "40px" }}>Loading checkout...</div>}>
+      <CheckoutContent />
+    </Suspense>
+  );
+}
+
+function CheckoutContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const plan = searchParams.get("plan") || "gold";
@@ -25,10 +34,7 @@ export default function CheckoutPage() {
 
   return (
     <main style={page}>
-      <button
-  onClick={() => router.push("/pricing")}
-  style={backButton}
->
+      <button onClick={() => router.push("/pricing")} style={backButton}>
         <ArrowLeft size={18} /> Back to pricing
       </button>
 
@@ -37,7 +43,6 @@ export default function CheckoutPage() {
           <div style={logoHex}>
             <div style={logoShape} />
           </div>
-
           <h2 style={brandName}>Lexora</h2>
         </div>
 
@@ -59,7 +64,9 @@ export default function CheckoutPage() {
           <div style={{ textAlign: "right" }}>
             <p style={muted}>Billing</p>
             <h2 style={{ margin: "5px 0" }}>{prices[plan]}</h2>
-            <p style={muted}>{billing === "yearly" ? "Yearly billing" : "Monthly billing"}</p>
+            <p style={muted}>
+              {billing === "yearly" ? "Yearly billing" : "Monthly billing"}
+            </p>
           </div>
         </div>
 
@@ -99,7 +106,9 @@ export default function CheckoutPage() {
 
           <button type="button" style={payButton}>Pay Now</button>
 
-          <p style={safeNote}>✓ Cancel anytime · ✓ No hidden fees · ✓ Secure payment processing</p>
+          <p style={safeNote}>
+            ✓ Cancel anytime · ✓ No hidden fees · ✓ Secure payment processing
+          </p>
         </form>
       </section>
     </main>
@@ -109,12 +118,10 @@ export default function CheckoutPage() {
 const page = { minHeight: "100vh", background: "#f8fafc", color: "#0f172a", fontFamily: "Arial, sans-serif", padding: "45px 20px" };
 const backButton = { display: "flex", alignItems: "center", gap: "8px", margin: "0 auto 22px", maxWidth: "820px", background: "transparent", border: "none", color: "#7c3aed", fontWeight: "bold" as const, cursor: "pointer", fontSize: "15px" };
 const checkoutCard = { maxWidth: "820px", margin: "0 auto", background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "24px", padding: "34px", boxShadow: "0 20px 50px rgba(15,23,42,0.08)" };
-
 const brandRow = { display: "flex", alignItems: "center", gap: "12px", marginBottom: "24px" };
 const logoHex = { width: "56px", height: "56px", background: "linear-gradient(135deg,#5b21b6,#c084fc)", clipPath: "polygon(25% 6%,75% 6%,100% 50%,75% 94%,25% 94%,0% 50%)", display: "flex", alignItems: "center", justifyContent: "center" };
 const logoShape = { width: "22px", height: "30px", borderLeft: "8px solid white", borderBottom: "8px solid white", borderBottomLeftRadius: "10px", transform: "translateY(-2px)" };
 const brandName = { margin: 0, fontSize: "26px", fontWeight: 800, color: "#111827" };
-
 const header = { textAlign: "center" as const, marginBottom: "28px" };
 const secureBadge = { display: "inline-flex", alignItems: "center", gap: "7px", background: "#f3e8ff", color: "#7c3aed", padding: "8px 14px", borderRadius: "999px", fontWeight: "bold" as const, marginBottom: "12px" };
 const title = { margin: "8px 0", fontSize: "34px" };
