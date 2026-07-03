@@ -54,7 +54,7 @@ export default function PricingPage() {
       "https://buy.polar.sh/polar_cl_A7Nr0bKmhPcczc9dMY1ZTgA8z13e6ggrmuLxk1cj5Ab",
     gold:
       "https://buy.polar.sh/polar_cl_GbQaVEWBGt7jhATZjNFVdiarBKQlf6jvL613J3XSKAW",
-    platinum:
+      platinum:
       "https://buy.polar.sh/polar_cl_aqCr5DXtBm8ZlsWlWucMFte1AxjeIBu00EI0d2pgTWV",
   };
 
@@ -104,7 +104,7 @@ export default function PricingPage() {
       desc: "For heavy professional use.",
       features: [
         "60,000 words/month",
-        "Premium humanization",
+        "Platinum humanization",
         "Maximum speed",
         "Early access features",
       ],
@@ -318,7 +318,7 @@ export default function PricingPage() {
 
           <div style={trustCard}>
             <Crown color="#7c3aed" />
-            <h3>Premium Modes</h3>
+            <h3>Platinum Modes</h3>
             <p style={mutedSmall}>
               Unlock faster and more advanced rewriting modes.
             </p>
