@@ -666,13 +666,31 @@ overflowX: "hidden",
     </div>
   </section>
 
-  <footer style={footer}>
-    <b>✦ Lexora </b>
-    <span>© 2026 Lexora </span>
-    <span>Privacy Policy</span>
-    <span>Terms of Service</span>
-    <span>Contact Us</span>
-  </footer>
+  <footer style={{ ...footer, flexWrap: "wrap" }}>
+  <b>✦ Lexora</b>
+  <span>© 2026 Lexora</span>
+
+  <button
+    onClick={() => router.push("/privacy")}
+    style={footerLink}
+  >
+    Privacy Policy
+  </button>
+
+  <button
+    onClick={() => router.push("/terms")}
+    style={footerLink}
+  >
+    Terms of Service
+  </button>
+
+  <button
+    onClick={() => router.push("/support")}
+    style={footerLink}
+  >
+    Contact Us
+  </button>
+</footer>
 </div>
 </section>
 </main>
@@ -1328,4 +1346,12 @@ const mobileMenuItem = {
   fontWeight: "bold" as const,
   textAlign: "left" as const,
   cursor: "pointer",
+};
+const footerLink = {
+  border: "none",
+  background: "transparent",
+  color: "#64748b",
+  fontSize: "14px",
+  cursor: "pointer",
+  padding: 0,
 };
