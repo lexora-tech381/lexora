@@ -49,6 +49,15 @@ export default function PricingPage() {
     return () => subscription.unsubscribe();
   }, []);
 
+  const checkoutLinks = {
+    silver:
+      "https://buy.polar.sh/polar_cl_A7Nr0bKmhPcczc9dMY1ZTgA8z13e6ggrmuLxk1cj5Ab",
+    gold:
+      "https://buy.polar.sh/polar_cl_GbQaVEWBGt7jhATZjNFVdiarBKQlf6jvL613J3XSKAW",
+    platinum:
+      "https://buy.polar.sh/polar_cl_aqCr5DXtBm8ZlsWlWucMFte1AxjeIBu00EI0d2pgTWV",
+  };
+
   const plans = [
     {
       name: "Free",
@@ -73,7 +82,7 @@ export default function PricingPage() {
         "Email support",
       ],
       button: "Get Silver",
-      path: `/checkout?plan=silver&billing=${billing}`,
+      path: checkoutLinks.silver,
     },
     {
       name: "Gold",
@@ -87,7 +96,7 @@ export default function PricingPage() {
       ],
       button: "Get Gold",
       popular: true,
-      path: `/checkout?plan=gold&billing=${billing}`,
+      path: checkoutLinks.gold,
     },
     {
       name: "Platinum",
@@ -100,7 +109,7 @@ export default function PricingPage() {
         "Early access features",
       ],
       button: "Get Platinum",
-      path: `/checkout?plan=platinum&billing=${billing}`,
+      path: checkoutLinks.platinum,
     },
   ];
 
@@ -232,9 +241,9 @@ export default function PricingPage() {
           </p>
 
           <p style={comingSoon}>
-            🚀 Paid subscriptions are coming soon. You can explore all plans
-            today.
-          </p>
+          🚀 Upgrade anytime and unlock more writing power with Lexora.
+      
+        </p>
 
           <div style={toggleWrapper}>
             <button
@@ -282,7 +291,7 @@ export default function PricingPage() {
     if (plan.name === "Free") {
       router.push("/");
     } else {
-      router.push(plan.path as string);
+      window.location.href = plan.path as string;
     }
   }}
   style={plan.popular ? popularButton : planButton}
