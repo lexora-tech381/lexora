@@ -151,7 +151,7 @@ export default function LoginPage() {
     setLoading(true);
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: "https://lexora-ai-smoky.vercel.app/reset-password",
+      redirectTo: "https://lexorahumanizer.com/reset-password",
     });
 
     setLoading(false);

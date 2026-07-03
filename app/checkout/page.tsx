@@ -21,13 +21,13 @@ function CheckoutContent() {
   const prices: any = {
     silver: billing === "yearly" ? "$29/year" : "$2.99/month",
     gold: billing === "yearly" ? "$99/year" : "$9.99/month",
-    platinum: billing === "yearly" ? "$189/year" : "$19.99/month",
+    premium: billing === "yearly" ? "$189/year" : "$19.99/month",
   };
 
   const words: any = {
     silver: "10,000 words/month",
     gold: "30,000 words/month",
-    platinum: "60,000 words/month",
+    premium: "60,000 words/month",
   };
 
   const planName = plan.charAt(0).toUpperCase() + plan.slice(1);
