@@ -15,6 +15,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Lexora AI",
   description: "Smarter rewriting. More human results.",
+  icons: {
+    icon: "/icon.png",
+    apple: "/favicon-512.png",
+  },
   verification: {
     google: "bd2ZO_yZYeWgiF6Q_CN4K03Fz3fgTbHfXlvvYN3wg9g",
     other: {
