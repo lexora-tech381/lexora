@@ -16,8 +16,11 @@ export const metadata: Metadata = {
   title: "Lexora AI",
   description: "Smarter rewriting. More human results.",
   verification: {
-    google: "bd2ZO_yZYeWgiF6Q_CN4K03Fz3fgTbHfXlvvYN3wg9g"
+    google: "bd2ZO_yZYeWgiF6Q_CN4K03Fz3fgTbHfXlvvYN3wg9g",
+    other: {
+      "msvalidate.01": "A7DD98FD58EA12CE281A8C68FD8368F3"
   },
+},
 };
 
 export default function RootLayout({
