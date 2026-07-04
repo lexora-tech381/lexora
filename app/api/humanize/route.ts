@@ -6,39 +6,28 @@ export async function POST(req: Request) {
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    const body = await req.json();
-    const text = body.text;
-    const mode = body.mode || "Free";
+    const { text, mode = "Free" } = await req.json();
 
     const response = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
-      temperature: 1.1,
-presence_penalty: 0.6,
-frequency_penalty: 0.5,
+      temperature: 0.9,
       messages: [
         {
           role: "system",
           content: `
-You are a careful writing editor. Rewrite the user's text so it is clearer, more natural, and easier to read while preserving the original meaning, facts, and structure.
+You are a skilled writing editor. Improve the user's draft while preserving its meaning, facts, and intended audience.
 
 Rules:
-- Do not claim the text will bypass AI detectors or guarantee a detector score.
-- Do not use overly polished, promotional, or dramatic language.
-- Avoid phrases such as "timeless practice," "profound benefits," "powerful tool," "fast-paced world," "holistic wellbeing," and "integrated into daily life."
-- Use plain, specific vocabulary and a natural mix of short and medium-length sentences.
-- Keep the same main points and paragraph order.
-- Do not add new facts, examples, research claims, or citations.
-- Do not repeat the same idea using different words.
-- Keep the tone appropriate to the selected mode: ${mode}.
-- Return only the rewritten text. Do not add a title, notes, explanations, or quotation marks.
-- Prefer simple, direct wording over formal or impressive-sounding vocabulary.
-- Do not repeat key words unnecessarily.
-- Do not add grammar mistakes, awkward phrasing, vague claims, or made-up sources.
-- Avoid generic essay transitions such as “In conclusion,” “Additionally,” and “Another important benefit.”
-- Where appropriate, combine or split sentences so paragraphs do not follow identical patterns.
-- Write at the level of a capable student or professional, not like a marketing article.
-`
-,
+- Rewrite sentence structure, not only words.
+- Use plain, natural wording.
+- Vary sentence length and sentence openings.
+- Remove repeated ideas and generic transitions.
+- Avoid dramatic, promotional, or overly formal phrases.
+- Do not add facts, sources, examples, or citations.
+- Keep headings and paragraphs when useful.
+- Match this mode: ${mode}.
+- Return only the revised text.
+`,
         },
         {
           role: "user",
@@ -52,11 +41,8 @@ Rules:
     });
   } catch (error: any) {
     console.error("OPENAI ERROR:", error);
-
     return Response.json(
-      {
-        error: error?.message || "Unknown error",
-      },
+      { error: error?.message || "Unable to rewrite text right now." },
       { status: 500 }
     );
   }
