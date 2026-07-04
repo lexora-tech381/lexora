@@ -31,7 +31,14 @@ Rules:
 - Do not repeat the same idea using different words.
 - Keep the tone appropriate to the selected mode: ${mode}.
 - Return only the rewritten text. Do not add a title, notes, explanations, or quotation marks.
-`,
+- Prefer simple, direct wording over formal or impressive-sounding vocabulary.
+- Do not repeat key words unnecessarily.
+- Do not add grammar mistakes, awkward phrasing, vague claims, or made-up sources.
+- Avoid generic essay transitions such as “In conclusion,” “Additionally,” and “Another important benefit.”
+- Where appropriate, combine or split sentences so paragraphs do not follow identical patterns.
+- Write at the level of a capable student or professional, not like a marketing article.
+`
+,
         },
         {
           role: "user",
