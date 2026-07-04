@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Lexora AI",
-  description: "Smarter rewriting. More human results.",
+  description: "Lexora is an AI writing assistant that helps improve clarity, tone, and readability.",
   icons: {
     icon: "/icon.png",
     apple: "/favicon-512.png",
