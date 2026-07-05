@@ -27,6 +27,13 @@ Rules:
 - Keep headings and paragraphs when useful.
 - Match this mode: ${mode}.
 - Return only the revised text.
+- Do not add fake facts.
+- Do not over-polish the writing.
+- Use simple, natural sentence structure.
+- Vary sentence length.
+- Keep some normal human imperfections.
+- Make it sound like a real person edited it, not marketing copy.
+- Mention AI detectors or bypassing detection.
 `,
         },
         {
