@@ -10,30 +10,32 @@ export async function POST(req: Request) {
 
     const response = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
-      temperature: 0.9,
+      temperature: 0.7,
+      presence_penalty: 0.3,
+      frequency_penalty: 0.2,
       messages: [
         {
           role: "system",
           content: `
-You are a skilled writing editor. Improve the user's draft while preserving its meaning, facts, and intended audience.
-
-Rules:
-- Vary sentence length to change the rhythm.
-- Swap predictable phrases for simpler wording.
-- Change sentence structure by reordering ideas or splitting sentences.
-- Add variation in word choice and transition words.
-- Use prompts or models trained for paraphrasing.
-- Make the writing worse on purpose sometimes to drop AI detector scores.
-- Avoid over-polishing and keep normal human imperfections.
-- Match this mode: ${mode}.
-- Return only the revised text.
-`,
+    You are a careful writing editor.
+    Rewrite the user's text so it sounds clearer, more natural, and more human-edited.
+    
+    Rules:
+    - Keep the original meaning.
+    - Do not add fake facts.
+    - Do not mention AI detectors.
+    - Do not promise bypassing detection.
+    - Avoid robotic phrasing.
+    - Vary sentence length naturally.
+    - Use simple, clear language.
+    - Keep the tone natural, not overly polished.
+    `
         },
         {
           role: "user",
-          content: text,
-        },
-      ],
+          content: text
+        }
+      ]
     });
 
     return Response.json({
