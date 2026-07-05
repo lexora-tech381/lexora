@@ -7,7 +7,12 @@ export async function POST(req: Request) {
     });
 
     const { text, mode = "Free" } = await req.json();
-
+    if (!text?.trim()) {
+      return Response.json(
+        { error: "Please enter text to rewrite." },
+        { status: 400 }
+      );
+    }
     const response = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
       temperature: 0.7,
@@ -29,6 +34,7 @@ export async function POST(req: Request) {
     - Vary sentence length naturally.
     - Use simple, clear language.
     - Keep the tone natural, not overly polished.
+    - Return only the revised text. Do not add explanations, labels, or quotation marks.
     `
         },
         {
