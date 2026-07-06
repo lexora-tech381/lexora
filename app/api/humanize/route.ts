@@ -1,13 +1,16 @@
 import Together from "together-ai"; // FIXED: Corrected npm package import string
 
 function optimizePacingAndSyntax(text: string): string {
+  // 1. Clean out generic AI transitions
   const tropes: { [key: string]: string } = {
     "furthermore": "also",
     "moreover": "in addition",
     "it is important to note": "remember",
     "testament to": "proof of",
     "in conclusion": "finally",
-    "consequently": "so"
+    "consequently": "so",
+    "not only": "not just",
+    "additionally": "plus"
   };
 
   let processedText = text;
@@ -16,14 +19,33 @@ function optimizePacingAndSyntax(text: string): string {
     processedText = processedText.replace(regex, replacement);
   }
 
+  // 2. Safely parse and alternate sentence rhythms
   const sentences = processedText.split(/(?<=[.!?])\s+/);
   const adjustedSentences = sentences.map((sentence, index) => {
-    const words = sentence.split(/\s+/);
-    if (index > 0 && sentences[index - 1].split(/\s+/).length > 22) {
+    if (!sentence.trim()) return sentence;
+    
+    let words = sentence.trim().split(/\s+/);
+    if (words.length === 0 || words[0] === "") return sentence;
+
+    // ENFORCE BURSTINESS: Safely split long sentences without duplicating words
+    if (index > 0 && sentences[index - 1].split(/\s+/).length > 20) {
       if (words.length > 12) {
-        return words.slice(0, 8).join(" ") + ". " + words.slice(8).join(" ");
+        return words.slice(0, 6).join(" ") + ". " + words.slice(6).join(" ");
       }
     }
+
+    // GRAMMAR BENDING: Inject casual human speech hooks securely
+    if (index % 3 === 0 && words.length > 5) {
+      const casualStarters = ["But ", "And ", "So, ", "Honestly, "];
+      const randomStarter = casualStarters[Math.floor(Math.random() * casualStarters.length)];
+      
+      // Fix the first word casing safely before adding the starter string
+      let firstWord = words[0];
+      words[0] = firstWord.charAt(0).toLowerCase() + firstWord.slice(1);
+      
+      return randomStarter + words.join(" ");
+    }
+    
     return sentence;
   });
 
