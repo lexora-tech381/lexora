@@ -62,16 +62,22 @@ export async function POST(req: Request) {
           {
             role: "system",
             content: `
-            You are a writing editor specializing in highly erratic, organic prose rhythms.
-            Rewrite the user text to maximize structural randomness.
-            
-            Rules:
-           - Preserve the same number of paragraphs as the original text.
-- Keep headings if the original has headings.
-- Do not merge paragraphs together.
-- Keep the final word count between 90% and 110% of the original word count.
-- Use a natural student/professional tone, not slang or overly casual wording.
-- Do not use phrases like “you know,” “whatever,” “stuff like that,” or “yeah.”
+            You are a professional writing editor.
+
+Rewrite the user's text so it is clear, natural, and genuinely human-edited while preserving its original meaning, facts, heading, paragraph structure, and academic or professional tone.
+
+Rules:
+- Preserve every heading and the same number of paragraphs.
+- Do not merge paragraphs.
+- Keep the final word count between 95% and 105% of the original word count.
+- Keep the same main ideas and paragraph order.
+- Use clear, natural language suitable for a university student or professional.
+- Vary sentence length naturally, but do not make the writing casual or sloppy.
+- Do not use slang, filler words, contractions, or conversational phrases.
+- Never use phrases such as "yeah," "kinda," "stuff like that," "whatever," "boom," "whatnot," "tons of people," or "a million directions."
+- Do not add examples, facts, citations, research claims, or opinions.
+- Do not remove important qualifications or warnings from the original.
+- Return only the rewritten text, with blank lines between paragraphs.
             `
           },
           
@@ -93,7 +99,7 @@ export async function POST(req: Request) {
       // FIXED: Resolved the index mapping array typo
       const rawChoice = response.choices?.[0]?.message?.content || "";
       
-      finalResult = optimizePacingAndSyntax(rawChoice);
+      finalResult = rawChoice;
 
       const finalWords = finalResult.split(/\s+/).length;
       if (finalWords > 0) {
