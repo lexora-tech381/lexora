@@ -14,10 +14,11 @@ export async function POST(req: Request) {
       );
     }
     const response = await openai.chat.completions.create({
-      model: "gpt-4.1-mini",
-      temperature: 0.7,
-      presence_penalty: 0.3,
-      frequency_penalty: 0.2,
+      model: "gpt-4o-mini",
+      temperature: 1.15,
+      top_p: 0.9,
+      presence_penalty: 0.6,
+      frequency_penalty: 0.8,
       messages: [
         {
           role: "system",
@@ -26,15 +27,14 @@ export async function POST(req: Request) {
     Rewrite the user's text so it sounds clearer, more natural, and more human-edited.
     
     Rules:
-    - Keep the original meaning.
-    - Do not add fake facts.
-    - Do not mention AI detectors.
-    - Do not promise bypassing detection.
-    - Avoid robotic phrasing.
-    - Vary sentence length naturally.
-    - Use simple, clear language.
-    - Keep the tone natural, not overly polished.
-    - Return only the revised text. Do not add explanations, labels, or quotation marks.
+   - Enforce dynamic sentence contrast by tightly alternating between long descriptive clauses and very short statements.
+- Prohibit structural symmetry across adjacent sentences to prevent the generation of uniform text blocks.
+- Eliminate high-frequency transition terms like "furthermore," "moreover," "in conclusion," and "consequently."
+- Prioritize active syntax layouts to reduce the use of rigid, passive verb phrases.
+- Maintain the absolute core semantic meaning of the source input without inventing external facts.
+- Apply direct, unpolished phrasing that favors conversational clarity over sterile academic or corporate prose.
+- Format with clean, irregular intervals for paragraphs to break up robotic structural blocks.
+- Output only the raw rewritten text without any introductory labels, tags, or formatting wrappers.
     `
         },
         {
