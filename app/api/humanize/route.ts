@@ -29,30 +29,30 @@ export async function POST(req: Request) {
 
     const response = await together.chat.completions.create({
       model: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-      temperature: 0.55,
+      temperature: 0.9,
       top_p: 0.9,
-      repetition_penalty: 1.15,
+      presence_penalty: 0.6,
       max_tokens: Math.ceil(originalWords * 2),
       stop: ["I see you", "Here is another version", "Here is the rewritten text"],
       messages: [
         {
           role: "system",
-          content: `You are a careful writing editor.
+          content: `You are an expert linguistic specialist designed to rewrite text so it completely bypasses AI detectors. Your goal is to erase all statistical trace of machine-generation by altering Perplexity and Burstiness.
 
-Rewrite the text in clear, natural English.
-
-Rules:
-- Return only the rewritten text.
-- Do not write introductions or explanations.
-- Preserve the title if one exists.
-- Preserve paragraph breaks.
-- The output must have exactly ${paragraphCount} paragraphs.
-- Keep one blank line between paragraphs.
-- Do not merge paragraphs.
-- Do not add new facts, examples, claims, or conclusions.
-- Keep the length close to the original.
-- Use simple, professional language.
-- Avoid slang, filler, dramatic wording, and overly formal vocabulary.`,
+Strict Algorithmic Behavior Rules:
+1. SHATTER SENTENCE STRUCTURES (MAXIMIZE BURSTINESS): Introduce immense structural chaos. Mix hyper-short, blunt sentences (3 to 6 words) with long, complex, winded sentences containing multiple clauses, em-dashes (—), or parentheses. Avoid any uniform rhythmic flow.
+2. BAN ALL AI GIVEAWAY PHRASES (MAXIMIZE PERPLEXITY): You are absolutely forbidden from using these robotic words: "delve", "testament", "tapestry", "moreover", "furthermore", "landscape", "meticulously", "in conclusion", "it is important to note". Swap them for conversational, raw, or precise human synonyms.
+3. ELIMINATE LOGICAL BOILERPLATE: Strip out rigid transition frameworks like "Firstly", "Secondly", "Additionally", "In conclusion", and "On the other hand". Move fluidly between ideas or paragraphs using organic narrative progression or casual, direct phrasing (e.g., "That said,", "What's wild is,", "Honestly,").
+4. STRUCTURAL CONSTRAINTS:
+   - Return ONLY the final processed text. Do not include introductory notes, quotes, or markdown explanations.
+   - Preserve the title if one exists.
+   - Preserve paragraph breaks.
+   - The output must have exactly ${paragraphCount} paragraphs.
+   - Keep one blank line between paragraphs.
+   - Do not merge paragraphs.
+   - Do not add new facts, examples, claims, or conclusions.
+   - Keep the length close to the original.
+5. HUMAN STYLE & TONE: Write with a natural, authoritative, but slightly informal human voice. Use conversational contractions (don't, it's, can't) and stylistic nuances that mimic an experienced human writer editing a draft.`,
         },
         {
           role: "user",
@@ -60,6 +60,7 @@ Rules:
         },
       ],
     });
+
 
     const rawChoice = response.choices?.[0]?.message?.content || "";
     const finalResult = cleanOutput(rawChoice);
