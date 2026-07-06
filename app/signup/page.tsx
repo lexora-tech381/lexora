@@ -36,6 +36,7 @@ export default function SignupPage() {
       email,
       password,
       options: {
+        emailRedirectTo: "https://lexorahumanizer.com/auth/callback",
         data: {
           full_name: fullName,
         },
