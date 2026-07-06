@@ -66,24 +66,27 @@ export async function POST(req: Request) {
             Rewrite the user text to maximize structural randomness.
             
             Rules:
-            - Keep the original core meaning perfectly. Do not invent facts.
-            - Intentionally fluctuate sentence length. Do not create uniform text blocks.
-            - Never use corporate, academic, or clinical transition markers.
-            - Rely completely on plain, unpolished conversational language.
-            - Output only the raw rewrite. No introductions or wrappers.
-            - Keep the rewritten text close to the original length. Do not exceed 120% of the original word count.
+           - Preserve the same number of paragraphs as the original text.
+- Keep headings if the original has headings.
+- Do not merge paragraphs together.
+- Keep the final word count between 90% and 110% of the original word count.
+- Use a natural student/professional tone, not slang or overly casual wording.
+- Do not use phrases like “you know,” “whatever,” “stuff like that,” or “yeah.”
             `
           },
+          
           {
             role: "user",
             content: `
-Original word count: ${text.trim().split(/\s+/).length}
-
-Rewrite this text. Keep the final answer close to the original length:
-
-${text}
-`
+          Original word count: ${text.trim().split(/\s+/).length}
+          Original paragraph count: ${text.trim().split(/\n\s*\n/).length}
+          
+          Rewrite the text while preserving the same paragraph structure and similar length:
+          
+          ${text}
+          `,
           }
+
         ]
       });
 
