@@ -54,7 +54,7 @@ export async function POST(req: Request) {
       const currentTopP = 0.85;
 
       const response = await together.chat.completions.create({
-        model: "meta-llama/Meta-Llama-3-8B-Instruct-Turbo", 
+        model: "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free", 
         temperature: currentTemperature,
         top_p: currentTopP,
         repetition_penalty: 1.25, 
