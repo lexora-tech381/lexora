@@ -71,11 +71,18 @@ export async function POST(req: Request) {
             - Never use corporate, academic, or clinical transition markers.
             - Rely completely on plain, unpolished conversational language.
             - Output only the raw rewrite. No introductions or wrappers.
+            - Keep the rewritten text close to the original length. Do not exceed 120% of the original word count.
             `
           },
           {
             role: "user",
-            content: text
+            content: `
+Original word count: ${text.trim().split(/\s+/).length}
+
+Rewrite this text. Keep the final answer close to the original length:
+
+${text}
+`
           }
         ]
       });
