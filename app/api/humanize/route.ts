@@ -91,7 +91,7 @@ ${text}`,
     });
 
     const rawChoice = response.choices?.[0]?.message?.content || "";
-    const finalResult = limitWords(rawChoice.trim(), maxWords);
+    const finalResult = rawChoice.trim();
 
     return Response.json({ result: finalResult });
   } catch (error: any) {
