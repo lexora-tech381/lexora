@@ -1,25 +1,5 @@
 import Together from "together-ai";
 
-function injectHumanPerplexity(text: string): string {
-  const fillers = [" honestly, ", " basically, ", " essentially, ", ", surprisingly, ", " frankly, "];
-  let paragraphs = text.split(/\n\s*\n/);
-
-  paragraphs = paragraphs.map((para) => {
-    let sentences = para.split(/(?<=[.!?])\s+/);
-    // Safely inject filler into the second sentence of the paragraph if it exists
-    if (sentences.length >= 2 && sentences[1]) {
-      const randomFiller = fillers[Math.floor(Math.random() * fillers.length)];
-      const targetSentence = sentences[1];
-      
-      const formattedSentence = randomFiller.trimStart() + " " + targetSentence.charAt(0).toLowerCase() + targetSentence.slice(1);
-      sentences[1] = formattedSentence;
-    }
-    return sentences.join(" ");
-  });
-
-  return paragraphs.join("\n\n");
-}
-
 function cleanOutput(text: string) {
   return text
     .replace(/I see you didn't follow[\s\S]*$/i, "")
@@ -48,20 +28,28 @@ export async function POST(req: Request) {
     const paragraphCount = text.trim().split(/\n\s*\n/).length;
     const originalWords = text.trim().split(/\s+/).length;
 
-    // Safe string building to avoid template literal escaping issues on your system
-    const userPrompt = "Rewrite the following text into standard, straightforward, casual human writing. Remove any mechanical structures. Keep the same exact facts:\n\n" + text;
+    const userPrompt = "Take the following core data and rewrite it completely from scratch into highly natural, fluent human prose:\n\n" + text;
 
     const response = await together.chat.completions.create({
       model: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
       temperature: 0.95,
-      top_p: 0.8,
-      presence_penalty: 0.7,
-      max_tokens: Math.ceil(originalWords * 2),
+      top_p: 0.85,
+      presence_penalty: 0.8,
+      max_tokens: Math.ceil(originalWords * 2.5),
       stop: ["I see you", "Here is another version", "Here is the rewritten text"],
       messages: [
         {
           role: "system",
-          content: "You are an average, everyday human editor rewriting a rough draft. Avoid sounding smart, academic, or overly literary. Speak with simple, plain human clarity.\n\nStrict Rules:\n1. NO DRAMATIC LANGUAGE: Absolutely ban words like 'cacophony', 'cornucopia', 'veritable', 'tapestry', 'delve', 'testament', 'journey', 'moreover', 'furthermore', 'landscape', 'meticulously', 'in conclusion', 'it is important to note', or 'ultimately'.\n2. NATURAL HUMAN VARIANCE: Write using conversational rhythms. Use short sentences mixed with conversational, mid-length sentences.\n3. FORMATTING CONSTRAINTS:\n- Return EXACTLY " + paragraphCount + " paragraphs.\n- Keep exactly one blank line between paragraphs.\n- Do not add fake facts, conclusions, or greetings.\n- Output ONLY the final plain text."
+          content: "You are an expert human ghostwriter. Your job is to completely rewrite text so it reads beautifully, flows elegantly, and completely passes advanced AI detection models by fundamentally changing the word choices and sentence patterns.\n\n" +
+          "Strict Humanizing Instructions:\n" +
+          "1. ERADICATE ROBOTIC PHRASING: Do not preserve the original sentence structures. Do not start paragraphs with generic sentences like 'Meditation is a simple practice'. Instead, open with an active, fresh human angle (e.g., 'At its core, meditation doesn\\'t have to be complicated.').\n" +
+          "2. ADVANCED BURSTINESS: Drastically alternate sentence patterns. Combine small ideas into deep, multi-clause human sentences using parenthetical side notes, em-dashes (—), or semicolons. Follow them up with a short, punchy truth. Never use the same structural rhythm twice in a row.\n" +
+          "3. BAN CRUTCH WORDS & REPETITIONS: Never use words like 'delve', 'testament', 'tapestry', 'furthermore', 'moreover', 'in conclusion', 'ultimately', 'meticulously', 'landscape'. Do not repeatedly use transitional words like 'frankly', 'honestly', or 'basically'. Mix your conversational connectors fluidly (e.g., 'That said,', 'In reality,', 'To be fair,', 'Granted,').\n" +
+          "4. STRIP OUT FORMAL INTROS/OUTROS: Completely erase summary conclusions that say 'In conclusion' or 'To summarize'. Seamlessly close the thought in the final paragraph.\n" +
+          "5. FORMATTING:\n" +
+          "- Return EXACTLY " + paragraphCount + " paragraphs.\n" +
+          "- Keep exactly one blank line between paragraphs.\n" +
+          "- Output ONLY the clean, final written prose without markdown code blocks, titles, introductions, or pleasantries."
         },
         {
           role: "user",
@@ -71,9 +59,7 @@ export async function POST(req: Request) {
     });
 
     const rawChoice = response.choices?.[0]?.message?.content || "";
-    const cleanText = cleanOutput(rawChoice);
-    
-    const finalResult = injectHumanPerplexity(cleanText);
+    const finalResult = cleanOutput(rawChoice);
 
     return Response.json({ result: finalResult });
   } catch (error: any) {
