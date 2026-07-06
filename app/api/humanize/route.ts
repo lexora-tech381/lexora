@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     const maxAttempts = 3;
 
     while (attempts < maxAttempts) {
-      const currentTemperature = 1.1 + (attempts * 0.05); 
+      const currentTemperature = 1.2; 
       const currentTopP = 0.85;
 
       const response = await together.chat.completions.create({
@@ -61,24 +61,18 @@ export async function POST(req: Request) {
         messages: [
           {
             role: "system",
-            content: `
-            You are a professional writing editor.
+            content: `You are a careful writing editor.
 
-Rewrite the user's text so it is clear, natural, and genuinely human-edited while preserving its original meaning, facts, heading, paragraph structure, and academic or professional tone.
+Rewrite the text in clear, plain English. Keep the same meaning, facts, heading, paragraph breaks, and approximate length.
 
-Rules:
-- Preserve every heading and the same number of paragraphs.
+Important:
+- Preserve blank lines between paragraphs exactly.
 - Do not merge paragraphs.
-- Keep the final word count between 95% and 105% of the original word count.
-- Keep the same main ideas and paragraph order.
-- Use clear, natural language suitable for a university student or professional.
-- Vary sentence length naturally, but do not make the writing casual or sloppy.
-- Do not use slang, filler words, contractions, or conversational phrases.
-- Never use phrases such as "yeah," "kinda," "stuff like that," "whatever," "boom," "whatnot," "tons of people," or "a million directions."
-- Do not add examples, facts, citations, research claims, or opinions.
-- Do not remove important qualifications or warnings from the original.
-- Return only the rewritten text, with blank lines between paragraphs.
-            `
+- Do not add new ideas, examples, claims, or conclusions.
+- Do not use poetic, dramatic, promotional, or complicated vocabulary.
+- Do not use slang or casual phrases.
+- Keep sentences direct and readable.
+- Return only the rewritten text.`,
           },
           
           {
