@@ -51,7 +51,7 @@ export async function POST(req: Request) {
 
     while (attempts < maxAttempts) {
       const currentTemperature = 1.2; 
-      const currentTopP = 0.85;
+      const currentTopP = 0.9;
 
       const response = await together.chat.completions.create({
         model: "meta-llama/Llama-3.3-70B-Instruct-Turbo", 
@@ -72,6 +72,7 @@ Important:
 - Do not use poetic, dramatic, promotional, or complicated vocabulary.
 - Do not use slang or casual phrases.
 - Keep sentences direct and readable.
+- Keep the final word count between 90% and 110% of the original word count. Do not expand the text.
 - Return only the rewritten text.`,
           },
           {
@@ -86,16 +87,13 @@ ${text}`,
         ]
       });
 
-      // FIXED: Restored the missing logical OR (||) operator
       const rawChoice = response.choices?.[0]?.message?.content || "";
-      
-      // FIXED: Re-connected the text back to the humanizing script so it actually runs
-      finalResult = optimizePacingAndSyntax(rawChoice);
 
-      // FIXED: Cleaned up fallback-proof break condition to avoid infinite 3-minute lag loops
-      if (finalResult && finalResult.trim().length > 10) {
-        break; 
-      }
+finalResult = rawChoice.trim();
+
+if (finalResult && finalResult.trim().length > 10) {
+  break;
+}
 
       attempts++;
     }
