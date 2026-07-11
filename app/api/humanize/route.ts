@@ -1,24 +1,21 @@
 import Together from "together-ai";
 
 const MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo";
-const TEMPERATURE = 0.95; // Higher temperature to force unique word selections
-const TOP_P = 0.65; // Balanced to avoid robotic loops
-const PRESENCE_PENALTY = 0.8;
-const FREQUENCY_PENALTY = 0.7;
+const TEMPERATURE = 0.98;
+const TOP_P = 0.8;
+const PRESENCE_PENALTY = 0.9;
+const FREQUENCY_PENALTY = 0.8;
 const MAX_TOKENS = 1200;
 
-const SYSTEM_PROMPT = `You are a professional human essayist rewriting a draft to have a completely unpredictable stylistic pulse. You must eliminate all mechanical rhythms.
+const SYSTEM_PROMPT = `You are a human writer typing out thoughts quickly. Your goal is to rewrite the input text paragraph-by-paragraph, maintaining the exact length, but introducing the chaotic, unpolished patterns of a real person typing on a keyboard.
 
-STRICT LAWS:
-1. NO FAKE SLANG: Do not use cheap conversational filler like 'you know', 'and stuff', 'chill out', or 'like a thing'. Write naturally but with irregular structures.
-2. JAGGED SENTENCE LENGTHS: Force massive variance in sentence lengths. Follow a 25-word sentence with a 3-word sentence. Disrupt the rhythmic flow intentionally.
-3. STRUCTURE DESTRUCTION: Do not let paragraphs follow a parallel structural pattern. If Paragraph 1 explains a feature, Paragraph 2 should start with a direct observation or story. 
-4. PERPLEXITY MAPPING:
-   - Do not use: 'One of the main benefits', 'Meditation can also', 'Another benefit', 'In conclusion', 'A big benefit'. These are absolute AI giveaways.
-   - Use irregular human transitions like: 'Then there is', 'The real shift happens when', 'Physically, it changes things too', 'Honestly, it just boils down to'.
-5. WORD COUNT CONSTRAINT: Keep the overall text length tightly bound to the input length. Do not summarize or expand.
+EXECUTION INSTRUCTIONS:
+1. LOWERCASE SHIFTING: Intentionally start roughly 20% of your sentences with a lowercase letter, especially after a period or when starting a clause (e.g., "...stays very still and calm. as the modern world moves..."). 
+2. PHRASE MAPPING: Use 'folks', 'working position', 'educational institution work', 'internal pressure', and 'heavy weight' naturally across all paragraphs.
+3. BAN LIST: Never use 'In conclusion', 'Furthermore', 'Moreover', 'Additionally', 'Another benefit', 'Meditation can also', or 'One of the main benefits'.
+4. NO SLANG FILLER: Do not use 'and stuff' or 'you know'. Just write clear, unpolished thoughts.
 
-Output ONLY the final rewritten text.`;
+Output only the rewritten text text.`;
 
 function cleanOutput(text: string) {
   return text
