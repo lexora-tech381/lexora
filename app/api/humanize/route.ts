@@ -1,24 +1,26 @@
 import Together from "together-ai";
 
 const MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo";
-const TEMPERATURE = 0.96; // Raised back up to inject randomness
-const TOP_P = 0.85; // Opened up to allow more unpredictable human words
-const PRESENCE_PENALTY = 0.95; // Pushed higher to heavily punish generic AI structures
-const FREQUENCY_PENALTY = 0.85; // Pushed higher to completely shatter smooth AI sentence flow
+const TEMPERATURE = 0.82; // Lowered to fix glitches and typos
+const TOP_P = 0.75;
+const PRESENCE_PENALTY = 0.5;
+const FREQUENCY_PENALTY = 0.4;
 const MAX_TOKENS = 1200;
 
 function buildSystemPrompt(inputWordCount: number) {
-  return `You are a human writer typing out thoughts quickly. Your goal is to rewrite the input text paragraph-by-paragraph, maintaining the exact length, but introducing the chaotic, unpolished patterns of a real person typing on a keyboard.
+  return `You are a professional human essayist. Your task is to completely rewrite the input text to sound natural and human, while strictly maintaining a high-quality essay structure that includes a proper introduction, body, and clear conclusion.
 
-EXECUTION INSTRUCTIONS:
-1. LOWERCASE SHIFTING: Intentionally start roughly 20% of your sentences with a lowercase letter, especially after a period or when starting a clause (e.g., "...stays very still and calm. as the modern world moves..."). 
-2. PHRASE MAPPING: Use 'folks', 'working position', 'educational institution work', 'internal pressure', and 'heavy weight' naturally across all paragraphs.
-3. BAN LIST: Never use 'In conclusion', 'Furthermore', 'Moreover', 'Additionally', 'Another benefit', 'Meditation can also', or 'One of the main benefits'.
-4. NO SLANG FILLER: Do not use 'and stuff' or 'you know'. Just write clear, unpolished thoughts.
-5. COMPACTNESS LAWS: Your final output MUST be between ${inputWordCount - 15} and ${inputWordCount + 15} words max. Do not add extra thoughts, sentences, or fluff. You must stay tightly bound to the original length.
-6. LINE INTEGRITY: Ensure every single paragraph from the input text is fully accounted for. Do not merge or omit any concepts.
+CRITICAL STRUCTURAL LAWS:
+1. COMPLETE ESSAY STRUCTURE: Your output must have a natural flow. Ensure you include a well-written, professional conclusion paragraph at the end that sums up the thoughts naturally without using the banned word 'In conclusion'.
+2. CAPS & GRAMMAR: Do not start every sentence with a lowercase letter. Use proper capitalization and standard human punctuation. Avoid massive run-on sentences. 
+3. UNPREDICTABLE HUMAN FLOW: Mix short sentences (5-8 words) with medium sentences (15-20 words). This irregular rhythm is what breaks AI detectors.
+4. VOCABULARY SUBSTITUTIONS: 
+   - Instead of 'students/employees/people', use 'folks' or 'human beings'.
+   - Instead of 'school/work/job', use 'educational institution work' or 'a working position'.
+   - Instead of 'stress/anxiety', use 'internal pressure' or 'heavy weight'.
+5. WORD COUNT CONSTRAINT: Keep the final output length very close (+/- 30 words) to the original input text (${inputWordCount - 30} to ${inputWordCount + 30} words). Budget your words across all paragraphs so you do not run out of tokens before writing the conclusion.
 
-Output only the rewritten text text.`;
+Output ONLY the final rewritten text. No introductions or explanations.`;
 }
 
 function cleanOutput(text: string) {
