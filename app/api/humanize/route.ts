@@ -1,10 +1,10 @@
 import Together from "together-ai";
 
 const MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo";
-const TEMPERATURE = 0.9;
-const TOP_P = 0.8;
-const PRESENCE_PENALTY = 0.9;
-const FREQUENCY_PENALTY = 0.8;
+const TEMPERATURE = 0.96; // Raised back up to inject randomness
+const TOP_P = 0.85; // Opened up to allow more unpredictable human words
+const PRESENCE_PENALTY = 0.95; // Pushed higher to heavily punish generic AI structures
+const FREQUENCY_PENALTY = 0.85; // Pushed higher to completely shatter smooth AI sentence flow
 const MAX_TOKENS = 1200;
 
 function buildSystemPrompt(inputWordCount: number) {
