@@ -1,23 +1,23 @@
 import Together from "together-ai";
 
 const MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo";
-const TEMPERATURE = 0.85;
-const PRESENCE_PENALTY = 0.6;
-const FREQUENCY_PENALTY = 0.5;
-const MAX_TOKENS = 1000;
+const TEMPERATURE = 0.9;
+const TOP_P = 0.4; // Drastically lowered to break default predictable token paths
+const PRESENCE_PENALTY = 0.8; // Increased to forcefully stop AI phrase repetitions
+const FREQUENCY_PENALTY = 0.7; // Increased to stop mechanical sentence flow
+const MAX_TOKENS = 1200;
 
-const SYSTEM_PROMPT = `You are an ordinary person rewriting an article to sound casual, relaxed, and conversational. Speak like a real human explaining a concept to a friend. 
+const SYSTEM_PROMPT = `You are a human editor. You rewrite text paragraph-by-paragraph to make it sound unpolished, casual, and conversational. Speak like a real human explaining a concept to a friend. 
 
-CORE DIRECTIVES:
-1. WORD COUNT LOCK: Your output must be roughly the same length as the input text. Do not add long explanations, extra paragraphs, or decorative text.
-2. LOOSE GRAMMAR & FLOW: Use everyday slang and casual transitions. Do not use perfect textbook grammar. Write short, blunt thoughts (e.g., 'Life moves fast. Pressure is everywhere.'). 
-3. HUMANIZED PHRASE MAPPING:
+CRITICAL LAWS:
+1. WORD COUNT LOCK: Your output must match the exact number of paragraphs and length of the input text. Do not expand or write summaries.
+2. PHRASE SUBSTITUTION MATRIX: 
    - Instead of 'students/employees/people', use 'folks' or 'human beings'.
    - Instead of 'school/work/job', use 'educational institution work' or 'a working position'.
    - Instead of 'stress/anxiety', use 'internal pressure' or 'heavy weight'.
-4. STRICT BAN: Never use AI structural markers like 'In conclusion', 'Furthermore', 'Moreover', 'Additionally', or 'Another benefit'. Just move directly to the next thought.
+3. NO AI MARKERS: Absolutely ban 'In conclusion', 'Furthermore', 'Moreover', 'Additionally', or 'Another benefit'. Never use semicolons (;) or em-dashes (—).
 
-Output only the final conversational text.`;
+Output ONLY the clean conversational text without any intros or outros.`;
 
 function cleanOutput(text: string) {
   return text
@@ -44,10 +44,16 @@ export async function POST(req: Request) {
       );
     }
 
+    // Force-injecting the translation format directly into the user payload to override Llama's rigidity
+    const formattedUserMessage = `Rewrite the following text to completely break its AI pattern. Use the phrasings: 'folks', 'working position', 'educational institution work', 'internal pressure', and 'heavy weight'. Keep the word count almost identical. Break up the sentence structures completely.
+
+INPUT TEXT:
+${text}`;
+
     const response = await together.chat.completions.create({
       model: MODEL,
       temperature: TEMPERATURE,
-      top_p: 0.85,
+      top_p: TOP_P,
       presence_penalty: PRESENCE_PENALTY,
       frequency_penalty: FREQUENCY_PENALTY,
       max_tokens: MAX_TOKENS,
@@ -63,7 +69,7 @@ export async function POST(req: Request) {
         },
         {
           role: "user",
-          content: text,
+          content: formattedUserMessage,
         },
       ],
     });
