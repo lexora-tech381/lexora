@@ -1,23 +1,25 @@
 import Together from "together-ai";
 
 const MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo";
-const TEMPERATURE = 0.98;
+const TEMPERATURE = 0.9;
 const TOP_P = 0.8;
 const PRESENCE_PENALTY = 0.9;
 const FREQUENCY_PENALTY = 0.8;
 const MAX_TOKENS = 1200;
 
-const SYSTEM_PROMPT = `You are a human writer typing out thoughts quickly. Your goal is to rewrite the input text paragraph-by-paragraph, maintaining the exact length, but introducing the chaotic, unpolished patterns of a real person typing on a keyboard.
+function buildSystemPrompt(inputWordCount: number) {
+  return `You are a human writer typing out thoughts quickly. Your goal is to rewrite the input text paragraph-by-paragraph, maintaining the exact length, but introducing the chaotic, unpolished patterns of a real person typing on a keyboard.
 
 EXECUTION INSTRUCTIONS:
 1. LOWERCASE SHIFTING: Intentionally start roughly 20% of your sentences with a lowercase letter, especially after a period or when starting a clause (e.g., "...stays very still and calm. as the modern world moves..."). 
 2. PHRASE MAPPING: Use 'folks', 'working position', 'educational institution work', 'internal pressure', and 'heavy weight' naturally across all paragraphs.
 3. BAN LIST: Never use 'In conclusion', 'Furthermore', 'Moreover', 'Additionally', 'Another benefit', 'Meditation can also', or 'One of the main benefits'.
 4. NO SLANG FILLER: Do not use 'and stuff' or 'you know'. Just write clear, unpolished thoughts.
-5. WORD COUNT MAINTENANCE: You must hit a final length between 370 and 390 words. If your draft is running too short, do not add robotic summary sentences. Instead, add descriptive, everyday details to your thoughts (e.g., instead of just 'phones are everywhere', write 'phones buzzing in our pockets all day long').
+5. COMPACTNESS LAWS: Your final output MUST be between ${inputWordCount - 15} and ${inputWordCount + 15} words max. Do not add extra thoughts, sentences, or fluff. You must stay tightly bound to the original length.
 6. LINE INTEGRITY: Ensure every single paragraph from the input text is fully accounted for. Do not merge or omit any concepts.
 
 Output only the rewritten text text.`;
+}
 
 function cleanOutput(text: string) {
   return text
@@ -44,6 +46,9 @@ export async function POST(req: Request) {
       );
     }
 
+    const inputWordCount = text.trim().split(/\s+/).length;
+    const systemPrompt = buildSystemPrompt(inputWordCount);
+
     const response = await together.chat.completions.create({
       model: MODEL,
       temperature: TEMPERATURE,
@@ -59,7 +64,7 @@ export async function POST(req: Request) {
       messages: [
         {
           role: "system",
-          content: SYSTEM_PROMPT,
+          content: systemPrompt,
         },
         {
           role: "user",
