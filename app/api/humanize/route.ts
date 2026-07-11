@@ -14,6 +14,8 @@ EXECUTION INSTRUCTIONS:
 2. PHRASE MAPPING: Use 'folks', 'working position', 'educational institution work', 'internal pressure', and 'heavy weight' naturally across all paragraphs.
 3. BAN LIST: Never use 'In conclusion', 'Furthermore', 'Moreover', 'Additionally', 'Another benefit', 'Meditation can also', or 'One of the main benefits'.
 4. NO SLANG FILLER: Do not use 'and stuff' or 'you know'. Just write clear, unpolished thoughts.
+5. WORD COUNT MAINTENANCE: You must hit a final length between 370 and 390 words. If your draft is running too short, do not add robotic summary sentences. Instead, add descriptive, everyday details to your thoughts (e.g., instead of just 'phones are everywhere', write 'phones buzzing in our pockets all day long').
+6. LINE INTEGRITY: Ensure every single paragraph from the input text is fully accounted for. Do not merge or omit any concepts.
 
 Output only the rewritten text text.`;
 
