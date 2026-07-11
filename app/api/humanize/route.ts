@@ -1,26 +1,31 @@
 import Together from "together-ai";
 
 const MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo";
-const TEMPERATURE = 0.82; // Lowered to fix glitches and typos
-const TOP_P = 0.75;
-const PRESENCE_PENALTY = 0.5;
-const FREQUENCY_PENALTY = 0.4;
+const TEMPERATURE = 0.75;
+const TOP_P = 0.7;
+const PRESENCE_PENALTY = 0.3;
+const FREQUENCY_PENALTY = 0.3;
 const MAX_TOKENS = 1200;
 
-function buildSystemPrompt(inputWordCount: number) {
-  return `You are a professional human essayist. Your task is to completely rewrite the input text to sound natural and human, while strictly maintaining a high-quality essay structure that includes a proper introduction, body, and clear conclusion.
+function breakDetectorMath(text: string): string {
+  let lines = text.split("\n");
+  let processedLines = lines.map((line) => {
+    if (!line.trim() || line.startsWith("#")) return line;
 
-CRITICAL STRUCTURAL LAWS:
-1. COMPLETE ESSAY STRUCTURE: Your output must have a natural flow. Ensure you include a well-written, professional conclusion paragraph at the end that sums up the thoughts naturally without using the banned word 'In conclusion'.
-2. CAPS & GRAMMAR: Do not start every sentence with a lowercase letter. Use proper capitalization and standard human punctuation. Avoid massive run-on sentences. 
-3. UNPREDICTABLE HUMAN FLOW: Mix short sentences (5-8 words) with medium sentences (15-20 words). This irregular rhythm is what breaks AI detectors.
-4. VOCABULARY SUBSTITUTIONS: 
-   - Instead of 'students/employees/people', use 'folks' or 'human beings'.
-   - Instead of 'school/work/job', use 'educational institution work' or 'a working position'.
-   - Instead of 'stress/anxiety', use 'internal pressure' or 'heavy weight'.
-5. WORD COUNT CONSTRAINT: Keep the final output length very close (+/- 30 words) to the original input text (${inputWordCount - 30} to ${inputWordCount + 30} words). Budget your words across all paragraphs so you do not run out of tokens before writing the conclusion.
+    // Programmatically lowercase about 15% of sentences after a period to break AI math
+    let sentences = line.split(/(?<=[.!?])\s+/);
+    let modifiedSentences = sentences.map((sentence, index) => {
+      if (index > 0 && Math.random() < 0.15 && sentence.length > 0) {
+        return sentence.charAt(0).toLowerCase() + sentence.slice(1);
+      }
+      return sentence;
+    });
 
-Output ONLY the final rewritten text. No introductions or explanations.`;
+    let joined = modifiedSentences.join(" ");
+    return joined.replace(/, /g, ",  ").replace(/\. /g, ". ");
+  });
+
+  return processedLines.join("\n");
 }
 
 function cleanOutput(text: string) {
@@ -48,8 +53,23 @@ export async function POST(req: Request) {
       );
     }
 
+    // 1. DYNAMIC WORD COUNT CALCULATION
     const inputWordCount = text.trim().split(/\s+/).length;
-    const systemPrompt = buildSystemPrompt(inputWordCount);
+
+    // 2. INJECT COUNT INTO THE SYSTEM PROMPT TO LOCK LENGTH
+    const systemPrompt = `You are a professional human essayist. Rewrite the input text to sound highly natural and engaging. 
+
+CRITICAL LAWS:
+1. WORD COUNT LOCK: Your final output MUST be between ${inputWordCount - 15} and ${inputWordCount + 15} words max. Budget your words perfectly across the text. Do not add fluff.
+2. FULL STRUCTURE: You must write a complete essay with a clean introduction, detailed body paragraphs, and a comprehensive closing conclusion paragraph.
+3. PROFESSIONAL STYLE: Do not use cheap slang or intentional typos. Use proper capitalization and grammar.
+4. PHRASE SUBSTITUTION: 
+   - Instead of 'students/employees/people', use 'folks' or 'human beings'.
+   - Instead of 'school/work/job', use 'educational institution work' or 'a working position'.
+   - Instead of 'stress/anxiety', use 'internal pressure' or 'heavy weight'.
+5. STRICT BAN: Never use the transition phrase 'In conclusion' or 'Another benefit'.
+
+Output ONLY the beautifully written, full essay text.`;
 
     const response = await together.chat.completions.create({
       model: MODEL,
@@ -58,32 +78,22 @@ export async function POST(req: Request) {
       presence_penalty: PRESENCE_PENALTY,
       frequency_penalty: FREQUENCY_PENALTY,
       max_tokens: MAX_TOKENS,
-      stop: [
-        "I see you",
-        "Here is another version",
-        "Here is the rewritten text",
-      ],
       messages: [
-        {
-          role: "system",
-          content: systemPrompt,
-        },
-        {
-          role: "user",
-          content: text,
-        },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: text },
       ],
     });
 
     const rawChoice = response.choices?.[0]?.message?.content || "";
-    const finalResult = cleanOutput(rawChoice);
+    const cleanText = cleanOutput(rawChoice);
+
+    // 3. APPLY STYLISTIC FILTER RIGHT BEFORE OUTPUT
+    const finalResult = breakDetectorMath(cleanText);
 
     return Response.json({ result: finalResult });
   } catch (error: unknown) {
     const message =
-      error instanceof Error
-        ? error.message
-        : "Unable to process text at this time.";
+      error instanceof Error ? error.message : "Unable to process text.";
     console.error("TOGETHER API ERROR:", error);
     return Response.json({ error: message }, { status: 500 });
   }
