@@ -1,32 +1,12 @@
 import Together from "together-ai";
 
-const MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo";
-const TEMPERATURE = 0.75;
-const TOP_P = 0.7;
-const PRESENCE_PENALTY = 0.3;
-const FREQUENCY_PENALTY = 0.3;
+// Switching to a model that naturally allows jagged human sentence structures
+const MODEL = "mistralai/Mixtral-8x7B-Instruct-v0.1";
+const TEMPERATURE = 0.88;
+const TOP_P = 0.8;
+const PRESENCE_PENALTY = 0.6;
+const FREQUENCY_PENALTY = 0.5;
 const MAX_TOKENS = 1200;
-
-function breakDetectorMath(text: string): string {
-  let lines = text.split("\n");
-  let processedLines = lines.map((line) => {
-    if (!line.trim() || line.startsWith("#")) return line;
-
-    // Programmatically lowercase about 15% of sentences after a period to break AI math
-    let sentences = line.split(/(?<=[.!?])\s+/);
-    let modifiedSentences = sentences.map((sentence, index) => {
-      if (index > 0 && Math.random() < 0.15 && sentence.length > 0) {
-        return sentence.charAt(0).toLowerCase() + sentence.slice(1);
-      }
-      return sentence;
-    });
-
-    let joined = modifiedSentences.join(" ");
-    return joined.replace(/, /g, ",  ").replace(/\. /g, ". ");
-  });
-
-  return processedLines.join("\n");
-}
 
 function cleanOutput(text: string) {
   return text
@@ -53,23 +33,21 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1. DYNAMIC WORD COUNT CALCULATION
+    // Dynamic word count calculation
     const inputWordCount = text.trim().split(/\s+/).length;
 
-    // 2. INJECT COUNT INTO THE SYSTEM PROMPT TO LOCK LENGTH
-    const systemPrompt = `You are a professional human essayist. Rewrite the input text to sound highly natural and engaging. 
+    const systemPrompt = `You are a professional human writer draft-editing a text. Your absolute objective is to rewrite the input text to sound entirely spontaneous, natural, and human. 
 
 CRITICAL LAWS:
-1. WORD COUNT LOCK: Your final output MUST be between ${inputWordCount - 15} and ${inputWordCount + 15} words max. Budget your words perfectly across the text. Do not add fluff.
-2. FULL STRUCTURE: You must write a complete essay with a clean introduction, detailed body paragraphs, and a comprehensive closing conclusion paragraph.
-3. PROFESSIONAL STYLE: Do not use cheap slang or intentional typos. Use proper capitalization and grammar.
-4. PHRASE SUBSTITUTION: 
+1. WORD COUNT LOCK: Your final output MUST be tightly budgeted between ${inputWordCount - 15} and ${inputWordCount + 15} words max. Do not expand or write extra filler sentences.
+2. FULL ESSAY FLOW: Maintain a standard, high-quality essay flow. This includes a clear opening section, descriptive points, and a full conclusion paragraph at the end. Do not use the phrase 'In conclusion'.
+3. NATURAL SENTENCE JUGGLING: Intentionally vary sentence lengths dramatically. Mix very short sentences (4-7 words) with standard sentences. Avoid uniform, perfectly balanced textbook phrasing.
+4. PHRASE SUBSTITUTION MATRIX: 
    - Instead of 'students/employees/people', use 'folks' or 'human beings'.
    - Instead of 'school/work/job', use 'educational institution work' or 'a working position'.
    - Instead of 'stress/anxiety', use 'internal pressure' or 'heavy weight'.
-5. STRICT BAN: Never use the transition phrase 'In conclusion' or 'Another benefit'.
 
-Output ONLY the beautifully written, full essay text.`;
+Output ONLY the final rewritten text. No introductions, explanations, or quotes.`;
 
     const response = await together.chat.completions.create({
       model: MODEL,
@@ -85,10 +63,7 @@ Output ONLY the beautifully written, full essay text.`;
     });
 
     const rawChoice = response.choices?.[0]?.message?.content || "";
-    const cleanText = cleanOutput(rawChoice);
-
-    // 3. APPLY STYLISTIC FILTER RIGHT BEFORE OUTPUT
-    const finalResult = breakDetectorMath(cleanText);
+    const finalResult = cleanOutput(rawChoice);
 
     return Response.json({ result: finalResult });
   } catch (error: unknown) {
