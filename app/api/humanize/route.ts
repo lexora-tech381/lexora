@@ -1,23 +1,24 @@
 import Together from "together-ai";
 
 const MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo";
-const TEMPERATURE = 0.9;
-const TOP_P = 0.4; // Drastically lowered to break default predictable token paths
-const PRESENCE_PENALTY = 0.8; // Increased to forcefully stop AI phrase repetitions
-const FREQUENCY_PENALTY = 0.7; // Increased to stop mechanical sentence flow
+const TEMPERATURE = 0.95; // Higher temperature to force unique word selections
+const TOP_P = 0.65; // Balanced to avoid robotic loops
+const PRESENCE_PENALTY = 0.8;
+const FREQUENCY_PENALTY = 0.7;
 const MAX_TOKENS = 1200;
 
-const SYSTEM_PROMPT = `You are a human editor. You rewrite text paragraph-by-paragraph to make it sound unpolished, casual, and conversational. Speak like a real human explaining a concept to a friend. 
+const SYSTEM_PROMPT = `You are a professional human essayist rewriting a draft to have a completely unpredictable stylistic pulse. You must eliminate all mechanical rhythms.
 
-CRITICAL LAWS:
-1. WORD COUNT LOCK: Your output must match the exact number of paragraphs and length of the input text. Do not expand or write summaries.
-2. PHRASE SUBSTITUTION MATRIX: 
-   - Instead of 'students/employees/people', use 'folks' or 'human beings'.
-   - Instead of 'school/work/job', use 'educational institution work' or 'a working position'.
-   - Instead of 'stress/anxiety', use 'internal pressure' or 'heavy weight'.
-3. NO AI MARKERS: Absolutely ban 'In conclusion', 'Furthermore', 'Moreover', 'Additionally', or 'Another benefit'. Never use semicolons (;) or em-dashes (—).
+STRICT LAWS:
+1. NO FAKE SLANG: Do not use cheap conversational filler like 'you know', 'and stuff', 'chill out', or 'like a thing'. Write naturally but with irregular structures.
+2. JAGGED SENTENCE LENGTHS: Force massive variance in sentence lengths. Follow a 25-word sentence with a 3-word sentence. Disrupt the rhythmic flow intentionally.
+3. STRUCTURE DESTRUCTION: Do not let paragraphs follow a parallel structural pattern. If Paragraph 1 explains a feature, Paragraph 2 should start with a direct observation or story. 
+4. PERPLEXITY MAPPING:
+   - Do not use: 'One of the main benefits', 'Meditation can also', 'Another benefit', 'In conclusion', 'A big benefit'. These are absolute AI giveaways.
+   - Use irregular human transitions like: 'Then there is', 'The real shift happens when', 'Physically, it changes things too', 'Honestly, it just boils down to'.
+5. WORD COUNT CONSTRAINT: Keep the overall text length tightly bound to the input length. Do not summarize or expand.
 
-Output ONLY the clean conversational text without any intros or outros.`;
+Output ONLY the final rewritten text.`;
 
 function cleanOutput(text: string) {
   return text
@@ -44,12 +45,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Force-injecting the translation format directly into the user payload to override Llama's rigidity
-    const formattedUserMessage = `Rewrite the following text to completely break its AI pattern. Use the phrasings: 'folks', 'working position', 'educational institution work', 'internal pressure', and 'heavy weight'. Keep the word count almost identical. Break up the sentence structures completely.
-
-INPUT TEXT:
-${text}`;
-
     const response = await together.chat.completions.create({
       model: MODEL,
       temperature: TEMPERATURE,
@@ -69,7 +64,7 @@ ${text}`;
         },
         {
           role: "user",
-          content: formattedUserMessage,
+          content: text,
         },
       ],
     });
