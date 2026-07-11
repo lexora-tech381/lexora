@@ -1,5 +1,19 @@
 import Together from "together-ai";
 
+const MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo";
+const TEMPERATURE = 0.7;
+const PRESENCE_PENALTY = 0.2;
+const FREQUENCY_PENALTY = 0.3;
+
+const SYSTEM_PROMPT = `You are an expert human editor. Your job is to rewrite the input text to sound natural, clean, and professional. 
+
+CRITICAL RULES:
+1. WORD COUNT CONSTRAINT: Keep the output length within +/- 10% of the input text's word count. Do not expand or fluff the content.
+2. PUNCTUATION LIMITS: Never use long, winding run-on sentences. Completely ban the use of em-dashes (—) and semicolons (;) to link clauses. Use standard periods (.) to separate thoughts.
+3. NATURAL SENTENCE STRUCTURE: Use clean, crisp sentences. Write like a professional human essayist—not a machine trying to look chaotic. Mix simple 6-word sentences with standard 15-word sentences.
+4. ABSOLUTE VOCABULARY BAN: Do not use: 'in today's world', 'frenetic world', 'navigating the demands', 'testament', 'delve', 'moreover', 'furthermore', 'tapestry'.
+5. OUTPUT DIRECTION: Output ONLY the clean, final edited text. No intros or outros.`;
+
 function cleanOutput(text: string) {
   return text
     .replace(/I see you didn't follow[\s\S]*$/i, "")
@@ -8,6 +22,15 @@ function cleanOutput(text: string) {
     .replace(/^Here is[\s\S]*?:/i, "")
     .replace(/```[a-z]*\n[\s\S]*?\n```/g, "")
     .trim();
+}
+
+function buildUserPrompt(text: string, paragraphCount: number, wordCount: number) {
+  return [
+    "Rewrite the following text. Keep the output within +/- 10% of the input word count.",
+    `Input word count: ${wordCount}. Return exactly ${paragraphCount} paragraph(s) with one blank line between each.`,
+    "",
+    text,
+  ].join("\n");
 }
 
 export async function POST(req: Request) {
@@ -21,52 +44,47 @@ export async function POST(req: Request) {
     if (!text || !text.trim()) {
       return Response.json(
         { error: "Please enter text to rewrite." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const paragraphCount = text.trim().split(/\n\s*\n/).length;
     const originalWords = text.trim().split(/\s+/).length;
 
-    const userPrompt = "Take the following core data and rewrite it completely from scratch into highly natural, fluent human prose:\n\n" + text;
-
     const response = await together.chat.completions.create({
-      model: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-      temperature: 0.95,
+      model: MODEL,
+      temperature: TEMPERATURE,
       top_p: 0.85,
-      presence_penalty: 0.8,
-      max_tokens: Math.ceil(originalWords * 2.5),
-      stop: ["I see you", "Here is another version", "Here is the rewritten text"],
+      presence_penalty: PRESENCE_PENALTY,
+      frequency_penalty: FREQUENCY_PENALTY,
+      max_tokens: Math.ceil(originalWords * 1.2),
+      stop: [
+        "I see you",
+        "Here is another version",
+        "Here is the rewritten text",
+      ],
       messages: [
         {
           role: "system",
-          content: "You are an expert human ghostwriter. Your job is to completely rewrite text so it reads beautifully, flows elegantly, and completely passes advanced AI detection models by fundamentally changing the word choices and sentence patterns.\n\n" +
-          "Strict Humanizing Instructions:\n" +
-          "1. ERADICATE ROBOTIC PHRASING: Do not preserve the original sentence structures. Do not start paragraphs with generic sentences like 'Meditation is a simple practice'. Instead, open with an active, fresh human angle (e.g., 'At its core, meditation doesn\\'t have to be complicated.').\n" +
-          "2. ADVANCED BURSTINESS: Drastically alternate sentence patterns. Combine small ideas into deep, multi-clause human sentences using parenthetical side notes, em-dashes (—), or semicolons. Follow them up with a short, punchy truth. Never use the same structural rhythm twice in a row.\n" +
-          "3. BAN CRUTCH WORDS & REPETITIONS: Never use words like 'delve', 'testament', 'tapestry', 'furthermore', 'moreover', 'in conclusion', 'ultimately', 'meticulously', 'landscape'. Do not repeatedly use transitional words like 'frankly', 'honestly', or 'basically'. Mix your conversational connectors fluidly (e.g., 'That said,', 'In reality,', 'To be fair,', 'Granted,').\n" +
-          "4. STRIP OUT FORMAL INTROS/OUTROS: Completely erase summary conclusions that say 'In conclusion' or 'To summarize'. Seamlessly close the thought in the final paragraph.\n" +
-          "5. FORMATTING:\n" +
-          "- Return EXACTLY " + paragraphCount + " paragraphs.\n" +
-          "- Keep exactly one blank line between paragraphs.\n" +
-          "- Output ONLY the clean, final written prose without markdown code blocks, titles, introductions, or pleasantries."
+          content: SYSTEM_PROMPT,
         },
         {
           role: "user",
-          content: userPrompt
-        }
-      ]
+          content: buildUserPrompt(text, paragraphCount, originalWords),
+        },
+      ],
     });
 
     const rawChoice = response.choices?.[0]?.message?.content || "";
     const finalResult = cleanOutput(rawChoice);
 
     return Response.json({ result: finalResult });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to process text at this time.";
     console.error("TOGETHER API ERROR:", error);
-    return Response.json(
-      { error: error?.message || "Unable to process text at this time." },
-      { status: 500 }
-    );
+    return Response.json({ error: message }, { status: 500 });
   }
 }
