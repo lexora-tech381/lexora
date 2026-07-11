@@ -1,20 +1,23 @@
 import Together from "together-ai";
 
 const MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo";
-const TEMPERATURE = 0.65;
-const PRESENCE_PENALTY = 0.0;
-const FREQUENCY_PENALTY = 0.0;
-const MAX_TOKENS = 1500;
+const TEMPERATURE = 0.85;
+const PRESENCE_PENALTY = 0.6;
+const FREQUENCY_PENALTY = 0.5;
+const MAX_TOKENS = 1000;
 
-const SYSTEM_PROMPT = `You are an expert human rewriter. You rewrite text paragraph-by-paragraph. You must maintain an informal, slightly clunky, human-like vocabulary throughout the ENTIRE document. Never slip back into formal AI phrasing.
+const SYSTEM_PROMPT = `You are an ordinary person rewriting an article to sound casual, relaxed, and conversational. Speak like a real human explaining a concept to a friend. 
 
-STRICT LAWS:
-1. NO FORMAL TRANSITIONS: Completely ban the words 'In conclusion', 'As a result', 'Another benefit', 'Furthermore', and 'Moreover'. 
-2. UNPOLISHED PHRASING: Keep swapping out words for human equivalents ('folks', 'working position', 'heavy weight', 'internal pressure') in EVERY single paragraph, not just the first one.
-3. MATCH LENGTH EXACTLY: Do not summarize or expand. Keep the exact paragraph breaks of the input text.
-4. DO NOT CUT OFF: Finish every thought cleanly.
+CORE DIRECTIVES:
+1. WORD COUNT LOCK: Your output must be roughly the same length as the input text. Do not add long explanations, extra paragraphs, or decorative text.
+2. LOOSE GRAMMAR & FLOW: Use everyday slang and casual transitions. Do not use perfect textbook grammar. Write short, blunt thoughts (e.g., 'Life moves fast. Pressure is everywhere.'). 
+3. HUMANIZED PHRASE MAPPING:
+   - Instead of 'students/employees/people', use 'folks' or 'human beings'.
+   - Instead of 'school/work/job', use 'educational institution work' or 'a working position'.
+   - Instead of 'stress/anxiety', use 'internal pressure' or 'heavy weight'.
+4. STRICT BAN: Never use AI structural markers like 'In conclusion', 'Furthermore', 'Moreover', 'Additionally', or 'Another benefit'. Just move directly to the next thought.
 
-Output ONLY the rewritten text.`;
+Output only the final conversational text.`;
 
 function cleanOutput(text: string) {
   return text
