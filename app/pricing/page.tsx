@@ -23,8 +23,6 @@ interface PricingPlan {
   description: string;
   monthlyPrice: number;
   yearlyPrice: number;
-  monthlyCheckoutUrl?: string;
-  yearlyCheckoutUrl?: string;
   features: string[];
   allowance: string;
   modes: string;
@@ -39,24 +37,6 @@ const dailyLimit = 10;
 // Future subscription integration point:
 // Replace `null` with the verified plan id from billing/webhook data.
 const currentPlanId: PricingPlan["id"] | null = null;
-
-const POLAR_CHECKOUT = {
-  silverMonthly:
-    "https://buy.polar.sh/polar_cl_A7Nr0bKmhPcczc9dMY1ZTgA8z13e6ggrmuLxk1cj5Ab",
-  goldMonthly:
-    "https://buy.polar.sh/polar_cl_GbQaVEWBGt7jhATZjNFVdiarBKQlf6jvL613J3XSKAW",
-  premiumMonthly:
-    "https://buy.polar.sh/polar_cl_aqCr5DXtBm8ZlsWlWucMFte1AxjeIBu00EI0d2pgTWV",
-} as const;
-
-function getCheckoutUrl(
-  envValue: string | undefined,
-  fallback?: string,
-): string | undefined {
-  const fromEnv = envValue?.trim();
-  if (fromEnv) return fromEnv;
-  return fallback;
-}
 
 function getUserInitial(user: User): string {
   const fullName = user.user_metadata?.full_name;
@@ -119,13 +99,6 @@ function buildPlans(): PricingPlan[] {
       description: "For light monthly writing needs.",
       monthlyPrice: 2.99,
       yearlyPrice: 29,
-      monthlyCheckoutUrl: getCheckoutUrl(
-        process.env.NEXT_PUBLIC_POLAR_SILVER_MONTHLY_URL,
-        POLAR_CHECKOUT.silverMonthly,
-      ),
-      yearlyCheckoutUrl: getCheckoutUrl(
-        process.env.NEXT_PUBLIC_POLAR_SILVER_YEARLY_URL,
-      ),
       allowance: "10,000 words per month",
       modes: "Standard rewrite modes",
       processing: "Faster processing",
@@ -144,13 +117,6 @@ function buildPlans(): PricingPlan[] {
       monthlyPrice: 9.99,
       yearlyPrice: 99,
       popular: true,
-      monthlyCheckoutUrl: getCheckoutUrl(
-        process.env.NEXT_PUBLIC_POLAR_GOLD_MONTHLY_URL,
-        POLAR_CHECKOUT.goldMonthly,
-      ),
-      yearlyCheckoutUrl: getCheckoutUrl(
-        process.env.NEXT_PUBLIC_POLAR_GOLD_YEARLY_URL,
-      ),
       allowance: "30,000 words per month",
       modes: "Advanced rewrite modes",
       processing: "Faster processing",
@@ -168,13 +134,6 @@ function buildPlans(): PricingPlan[] {
       description: "For heavier professional writing workloads.",
       monthlyPrice: 19.99,
       yearlyPrice: 189,
-      monthlyCheckoutUrl: getCheckoutUrl(
-        process.env.NEXT_PUBLIC_POLAR_PREMIUM_MONTHLY_URL,
-        POLAR_CHECKOUT.premiumMonthly,
-      ),
-      yearlyCheckoutUrl: getCheckoutUrl(
-        process.env.NEXT_PUBLIC_POLAR_PREMIUM_YEARLY_URL,
-      ),
       allowance: "60,000 words per month",
       modes: "All available rewrite modes",
       processing: "Fastest available processing",
@@ -219,10 +178,6 @@ export default function PricingPage() {
       .filter((value) => value > 0);
     return percents.length ? Math.max(...percents) : 0;
   }, [plans]);
-
-  const hasAnyYearlyCheckout = plans.some(
-    (plan) => plan.id !== "free" && Boolean(plan.yearlyCheckoutUrl),
-  );
 
   useEffect(() => {
     const checkScreen = () => {
@@ -339,50 +294,91 @@ export default function PricingPage() {
       return;
     }
 
-    const checkoutUrl = isYearly
-      ? plan.yearlyCheckoutUrl
-      : plan.monthlyCheckoutUrl;
-
-    if (!checkoutUrl) {
-      setSelectedPlanId(null);
-      if (isYearly) {
-        setInfoMessage("Yearly billing will be available soon.");
-      } else {
-        setErrorMessage(
-          "Checkout is temporarily unavailable for this plan. Please try again later.",
-        );
-      }
-      return;
-    }
-
     setSelectedPlanId(plan.id);
 
     try {
-      window.location.assign(checkoutUrl);
+      const {
+        data: { session: currentSession },
+      } = await supabase.auth.getSession();
+
+      if (!currentSession?.access_token) {
+        setSelectedPlanId(null);
+        router.push(`/signup?plan=${plan.id}&billing=${billing}`);
+        return;
+      }
+
+      const response = await fetch("/api/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${currentSession.access_token}`,
+        },
+        body: JSON.stringify({
+          plan: plan.id,
+          billing,
+        }),
+      });
+
+      const data = (await response.json().catch(() => null)) as
+        | { url?: unknown; error?: unknown }
+        | null;
+
+      if (!response.ok) {
+        setSelectedPlanId(null);
+
+        if (response.status === 401) {
+          router.push(`/signup?plan=${plan.id}&billing=${billing}`);
+          return;
+        }
+
+        if (
+          response.status === 400 &&
+          data?.error === "This billing option is not available."
+        ) {
+          setErrorMessage(
+            "This checkout option is not configured yet. Please contact support.",
+          );
+          return;
+        }
+
+        const apiError =
+          typeof data?.error === "string" ? data.error : null;
+
+        setErrorMessage(
+          apiError || "We could not create the checkout. Please try again.",
+        );
+        return;
+      }
+
+      if (typeof data?.url !== "string" || !data.url.trim()) {
+        setSelectedPlanId(null);
+        setErrorMessage(
+          "We could not create the checkout. Please try again.",
+        );
+        return;
+      }
+
+      window.location.assign(data.url);
     } catch (error) {
       console.error("Checkout redirect error:", error);
       setSelectedPlanId(null);
       setErrorMessage(
-        "Checkout could not open. Please try again.",
+        "We could not create the checkout. Please try again.",
       );
     }
   }
 
   function getButtonLabel(plan: PricingPlan): string {
-    if (selectedPlanId === plan.id) return "Opening checkout...";
+    if (selectedPlanId === plan.id) {
+      return "Opening checkout...";
+    }
 
     if (plan.id === "free") {
       return "Use Free Plan";
     }
 
-    if (currentPlanId === plan.id) return "Current Plan";
-
-    if (isYearly && !plan.yearlyCheckoutUrl) {
-      return "Yearly Coming Soon";
-    }
-
-    if (isYearly && plan.yearlyCheckoutUrl) {
-      return `Get ${plan.name}`;
+    if (currentPlanId === plan.id) {
+      return "Current Plan";
     }
 
     return `Get ${plan.name}`;
@@ -486,11 +482,7 @@ export default function PricingPage() {
                 onClick={() => {
                   setBilling("yearly");
                   setErrorMessage(null);
-                  setInfoMessage(
-                    hasAnyYearlyCheckout
-                      ? null
-                      : "Yearly billing will be available soon.",
-                  );
+                  setInfoMessage(null);
                 }}
                 style={billing === "yearly" ? activeToggle : inactiveToggle}
               >
@@ -500,10 +492,6 @@ export default function PricingPage() {
 
             {isYearly && maxYearlySavingsPercent > 0 ? (
               <p style={saveText}>Save up to {maxYearlySavingsPercent}% with yearly billing where available.</p>
-            ) : null}
-
-            {isYearly && !hasAnyYearlyCheckout ? (
-              <p style={infoNote}>Yearly billing will be available soon.</p>
             ) : null}
           </header>
 
@@ -539,12 +527,9 @@ export default function PricingPage() {
                 : plan.monthlyPrice;
               const priceSuffix = isYearly ? "per year" : "per month";
               const isCurrent = currentPlanId === plan.id;
-              const checkoutUnavailable =
-                plan.id !== "free" && isYearly && !plan.yearlyCheckoutUrl;
               const disabled =
                 authLoading ||
                 selectedPlanId === plan.id ||
-                checkoutUnavailable ||
                 isCurrent;
 
               return (
@@ -695,9 +680,7 @@ export default function PricingPage() {
               ],
               [
                 "Is yearly billing available?",
-                hasAnyYearlyCheckout
-                  ? "Yearly billing is available for plans that show a yearly checkout option."
-                  : "Yearly billing will be available soon. Monthly checkout remains available now.",
+                "Monthly and yearly billing are available for Silver, Gold, and Premium.",
               ],
               [
                 "How do I get billing support?",
@@ -814,12 +797,6 @@ const saveText = {
   fontWeight: 600 as const,
   marginTop: "14px",
   fontSize: "14px",
-};
-
-const infoNote = {
-  color: "#64748b",
-  marginTop: "10px",
-  fontSize: "13px",
 };
 
 const errorBox = {
