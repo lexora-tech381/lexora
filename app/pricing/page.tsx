@@ -285,6 +285,35 @@ export default function PricingPage() {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const resetCheckoutState = () => {
+      setSelectedPlanId(null);
+    };
+
+    const handlePageShow = (event: PageTransitionEvent) => {
+      // Browser Back often restores this page from bfcache with stale React state.
+      if (event.persisted || document.visibilityState === "visible") {
+        resetCheckoutState();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        resetCheckoutState();
+      }
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", resetCheckoutState);
+
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", resetCheckoutState);
+    };
+  }, []);
+
   const navigate = (path: string) => {
     router.push(path);
   };
@@ -295,7 +324,7 @@ export default function PricingPage() {
   };
 
   async function handlePlanSelection(plan: PricingPlan) {
-    if (authLoading || selectedPlanId) return;
+    if (authLoading || selectedPlanId !== null) return;
 
     setErrorMessage(null);
     setInfoMessage(null);
@@ -315,6 +344,7 @@ export default function PricingPage() {
       : plan.monthlyCheckoutUrl;
 
     if (!checkoutUrl) {
+      setSelectedPlanId(null);
       if (isYearly) {
         setInfoMessage("Yearly billing will be available soon.");
       } else {
@@ -326,7 +356,16 @@ export default function PricingPage() {
     }
 
     setSelectedPlanId(plan.id);
-    window.location.href = checkoutUrl;
+
+    try {
+      window.location.assign(checkoutUrl);
+    } catch (error) {
+      console.error("Checkout redirect error:", error);
+      setSelectedPlanId(null);
+      setErrorMessage(
+        "Checkout could not open. Please try again.",
+      );
+    }
   }
 
   function getButtonLabel(plan: PricingPlan): string {
