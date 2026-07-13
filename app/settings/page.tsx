@@ -1,623 +1,866 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
-
+import Sidebar from "@/components/Sidebar";
+import Header from "@/components/Header";
 import {
-  LayoutDashboard,
-  PenSquare,
-  FileText,
-  BarChart3,
+  AlertCircle,
+  CheckCircle2,
   CreditCard,
-  Settings,
+  Eye,
+  EyeOff,
+  KeyRound,
   LifeBuoy,
-  Crown,
-  User,
-  Bell,
-  Shield,
-  Palette,
+  LogOut,
   Save,
+  Shield,
+  User as UserIcon,
 } from "lucide-react";
+
+const planName = "Free";
+const dailyLimit = 10;
+
+function getUserInitial(user: User): string {
+  const fullName = user.user_metadata?.full_name;
+  if (typeof fullName === "string" && fullName.trim()) {
+    return fullName.trim().charAt(0).toUpperCase();
+  }
+  if (user.email) {
+    return user.email.charAt(0).toUpperCase();
+  }
+  return "U";
+}
+
+function isStrongPassword(value: string): boolean {
+  return (
+    value.length >= 8 &&
+    /[A-Z]/.test(value) &&
+    /[a-z]/.test(value) &&
+    /[0-9]/.test(value)
+  );
+}
+
+function mapProfileError(message: string): string {
+  const normalized = message.toLowerCase();
+
+  if (
+    normalized.includes("too many") ||
+    normalized.includes("rate limit") ||
+    normalized.includes("over_request_rate_limit")
+  ) {
+    return "Too many attempts. Please wait before trying again.";
+  }
+
+  return "We could not update your profile. Please try again.";
+}
+
+function mapPasswordError(message: string): string {
+  const normalized = message.toLowerCase();
+
+  if (
+    normalized.includes("password") &&
+    (normalized.includes("weak") ||
+      normalized.includes("short") ||
+      normalized.includes("least") ||
+      normalized.includes("strength"))
+  ) {
+    return "Please choose a stronger password.";
+  }
+
+  if (
+    normalized.includes("same") ||
+    normalized.includes("different from the old")
+  ) {
+    return "Please choose a password that is different from your current one.";
+  }
+
+  if (
+    normalized.includes("too many") ||
+    normalized.includes("rate limit") ||
+    normalized.includes("over_request_rate_limit")
+  ) {
+    return "Too many attempts. Please wait before trying again.";
+  }
+
+  return "We could not update your password. Please try again.";
+}
 
 export default function SettingsPage() {
   const router = useRouter();
+  const [session, setSession] = useState<Session | null>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [todayUsage, setTodayUsage] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
+  const [nameFocused, setNameFocused] = useState(false);
 
-  const [isMobile, setIsMobile] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [newPasswordFocused, setNewPasswordFocused] = useState(false);
+  const [confirmFocused, setConfirmFocused] = useState(false);
+
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
 
   useEffect(() => {
     const checkScreen = () => setIsMobile(window.innerWidth < 768);
     checkScreen();
-
     window.addEventListener("resize", checkScreen);
     return () => window.removeEventListener("resize", checkScreen);
   }, []);
 
   useEffect(() => {
-    const loadUser = async () => {
+    let isMounted = true;
+
+    async function loadSettings() {
       const {
-        data: { session },
+        data: { session: currentSession },
+        error,
       } = await supabase.auth.getSession();
 
-      if (!session) {
-        router.push("/login");
+      if (!isMounted) return;
+
+      if (error) {
+        console.error("Settings session error:", error);
+        setCheckingAuth(false);
+        router.replace("/login");
         return;
       }
 
-      setUser(session.user);
-      setEmail(session.user.email || "");
-      setFullName(session.user.user_metadata?.full_name || "");
-    };
+      if (!currentSession) {
+        setCheckingAuth(false);
+        router.replace("/login");
+        return;
+      }
 
-    loadUser();
+      setSession(currentSession);
+      setEmail(currentSession.user.email || "");
+      setFullName(
+        typeof currentSession.user.user_metadata?.full_name === "string"
+          ? currentSession.user.user_metadata.full_name
+          : "",
+      );
+
+      const today = new Date().toISOString().split("T")[0];
+      const { data: usage, error: usageError } = await supabase
+        .from("usage")
+        .select("count")
+        .eq("user_id", currentSession.user.id)
+        .eq("date", today)
+        .maybeSingle();
+
+      if (usageError) {
+        console.error("Settings usage error:", usageError);
+      } else if (isMounted) {
+        setTodayUsage(usage?.count || 0);
+      }
+
+      if (isMounted) setCheckingAuth(false);
+    }
+
+    loadSettings();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!isMounted) return;
+
+      if (!nextSession) {
+        setSession(null);
+        router.replace("/login");
+        return;
+      }
+
+      setSession(nextSession);
+      setEmail(nextSession.user.email || "");
+      setFullName(
+        typeof nextSession.user.user_metadata?.full_name === "string"
+          ? nextSession.user.user_metadata.full_name
+          : "",
+      );
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, [router]);
 
-  const saveProfile = async () => {
-    setSaving(true);
+  const navigate = (path: string) => {
+    router.push(path);
+  };
 
-    const { error } = await supabase.auth.updateUser({
-      data: {
-        full_name: fullName,
-      },
-    });
+  const handleLogout = async () => {
+    setSignOutError(null);
+    setIsSigningOut(true);
 
-    setSaving(false);
+    const { error } = await supabase.auth.signOut();
 
     if (error) {
-      alert(error.message);
+      console.error("Settings logout error:", error);
+      setSignOutError("We could not sign you out. Please try again.");
+      setIsSigningOut(false);
       return;
     }
 
-    alert("Settings saved successfully!");
+    router.replace("/login");
   };
 
-  return (
-    <main style={{ ...page, flexDirection: isMobile ? "column" : "row" }}>
-      <aside style={{ ...sidebar, display: isMobile ? "none" : "flex" }}>
-        <h2 style={logo}>Lexora</h2>
+  async function handleSaveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (isSavingProfile) return;
 
-        <nav style={nav}>
-          <button onClick={() => router.push("/dashboard")} style={navItem}>
-            <LayoutDashboard size={18} /> Dashboard
-          </button>
+    setProfileError(null);
+    setProfileSuccess(null);
 
-          <button onClick={() => router.push("/")} style={navItem}>
-            <PenSquare size={18} /> Humanizer
-          </button>
+    const trimmedName = fullName.trim();
 
-          <button onClick={() => router.push("/documents")} style={navItem}>
-            <FileText size={18} /> Documents
-          </button>
+    if (trimmedName.length < 2) {
+      setProfileError("Please enter your full name (at least 2 characters).");
+      return;
+    }
 
-          <button onClick={() => router.push("/usage")} style={navItem}>
-            <BarChart3 size={18} /> Usage
-          </button>
+    if (trimmedName.length > 100) {
+      setProfileError("Full name must be 100 characters or fewer.");
+      return;
+    }
 
-          <button onClick={() => router.push("/pricing")} style={navItem}>
-            <CreditCard size={18} /> Pricing
-          </button>
+    setIsSavingProfile(true);
 
-          <button style={activeNav}>
-            <Settings size={18} /> Settings
-          </button>
+    const { data, error } = await supabase.auth.updateUser({
+      data: {
+        full_name: trimmedName,
+      },
+    });
 
-          <button onClick={() => router.push("/support")} style={navItem}>
-            <LifeBuoy size={18} /> Support
-          </button>
-        </nav>
+    setIsSavingProfile(false);
 
-        <div style={upgradeBox}>
-          <Crown size={22} color="#7c3aed" />
-          <h3>Upgrade to Pro</h3>
-          <p style={mutedSmall}>Unlock advanced settings and premium modes.</p>
-          <button onClick={() => router.push("/pricing")} style={upgradeButton}>
-            Upgrade Now →
-          </button>
-        </div>
-      </aside>
+    if (error) {
+      console.error("Settings profile update error:", error);
+      setProfileError(mapProfileError(error.message));
+      return;
+    }
 
-      <section
+    if (data.user) {
+      setFullName(
+        typeof data.user.user_metadata?.full_name === "string"
+          ? data.user.user_metadata.full_name
+          : trimmedName,
+      );
+      setSession((prev) =>
+        prev
+          ? {
+              ...prev,
+              user: data.user,
+            }
+          : prev,
+      );
+    }
+
+    setProfileSuccess("Profile updated successfully.");
+  }
+
+  async function handleUpdatePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (isUpdatingPassword) return;
+
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    if (!isStrongPassword(newPassword)) {
+      setPasswordError(
+        "Password must be at least 8 characters and include an uppercase letter, a lowercase letter, and a number.",
+      );
+      return;
+    }
+
+    if (!confirmPassword) {
+      setPasswordError("Please confirm your new password.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Passwords do not match.");
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    setIsUpdatingPassword(false);
+
+    if (error) {
+      console.error("Settings password update error:", error);
+      setPasswordError(mapPasswordError(error.message));
+      return;
+    }
+
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordSuccess("Password updated successfully.");
+  }
+
+  if (checkingAuth || !session) {
+    return (
+      <main
         style={{
-          flex: 1,
-          width: "100%",
-          maxWidth: isMobile ? "100%" : "1250px",
-          margin: isMobile ? "0" : "0 auto",
-          padding: isMobile ? "88px 16px 24px" : "50px 36px",
-          boxSizing: "border-box",
-          overflowX: "hidden",
+          ...pageShell,
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: "var(--font-geist-sans), system-ui, sans-serif",
         }}
       >
-        {isMobile && (
-          <header style={mobileHeader}>
-            <button
-              type="button"
-              onClick={() => setMenuOpen((prev) => !prev)}
-              style={menuButton}
-            >
-              ☰
-            </button>
+        <div style={loadingCard} role="status" aria-live="polite">
+          Loading settings…
+        </div>
+      </main>
+    );
+  }
 
-            <div style={brandWrap}>
-              <div style={brandIcon}>
-                <div style={brandMark} />
-              </div>
-              <h2 style={headerLogo}>Lexora</h2>
-            </div>
+  return (
+    <main
+      style={{
+        ...pageShell,
+        flexDirection: isMobile ? "column" : "row",
+        fontFamily: "var(--font-geist-sans), system-ui, sans-serif",
+      }}
+    >
+      <style>{`
+        .lexora-settings-btn:hover:not(:disabled) {
+          filter: brightness(1.04);
+        }
+        .lexora-settings-outline:hover:not(:disabled) {
+          background: #faf5ff;
+        }
+        .lexora-settings-danger:hover:not(:disabled) {
+          background: #fef2f2;
+        }
+        .lexora-settings-link:hover {
+          color: #5b21b6;
+        }
+        .lexora-settings-toggle:hover {
+          color: #6d28d9;
+        }
+        .lexora-settings-btn:focus-visible,
+        .lexora-settings-outline:focus-visible,
+        .lexora-settings-danger:focus-visible,
+        .lexora-settings-link:focus-visible,
+        .lexora-settings-toggle:focus-visible,
+        .lexora-settings-input:focus-visible {
+          outline: 2px solid #8b5cf6;
+          outline-offset: 2px;
+        }
+      `}</style>
 
-            <div style={headerActions}>
-              {user ? (
-                <div style={avatar}>
-                  {(
-                    user.user_metadata?.full_name?.[0] ||
-                    user.email?.[0] ||
-                    "U"
-                  ).toUpperCase()}
-                </div>
-              ) : (
-                <>
-                  <button onClick={() => router.push("/login")} style={headerSmallButton}>
-                    Login
-                  </button>
+      <Sidebar
+        isMobile={isMobile}
+        onNavigate={navigate}
+        activePath="/settings"
+        onLogout={handleLogout}
+      />
 
-                  <button onClick={() => router.push("/signup")} style={headerPurpleButton}>
-                    Sign Up
-                  </button>
-                </>
-              )}
-            </div>
-          </header>
-        )}
+      <section style={contentShell}>
+        <Header
+          isMobile={isMobile}
+          menuOpen={menuOpen}
+          onToggleMenu={() => setMenuOpen(!menuOpen)}
+          onCloseMenu={() => setMenuOpen(false)}
+          onNavigate={navigate}
+          session={session}
+          uses={todayUsage}
+          getUserInitial={getUserInitial}
+          planName={planName}
+          dailyLimit={dailyLimit}
+          onLogout={handleLogout}
+        />
 
-        {isMobile && menuOpen && (
-          <div style={mobileMenu}>
-            <button onClick={() => { setMenuOpen(false); router.push("/dashboard"); }} style={mobileMenuItem}>Dashboard</button>
-            <button onClick={() => { setMenuOpen(false); router.push("/"); }} style={mobileMenuItem}>Humanizer</button>
-            <button onClick={() => { setMenuOpen(false); router.push("/documents"); }} style={mobileMenuItem}>Documents</button>
-            <button onClick={() => { setMenuOpen(false); router.push("/usage"); }} style={mobileMenuItem}>Usage</button>
-            <button onClick={() => { setMenuOpen(false); router.push("/pricing"); }} style={mobileMenuItem}>Pricing</button>
-            <button onClick={() => { setMenuOpen(false); router.push("/settings"); }} style={mobileMenuItem}>Settings</button>
-            <button onClick={() => { setMenuOpen(false); router.push("/support"); }} style={mobileMenuItem}>Support</button>
-          </div>
-        )}
-
-        <header
+        <div
           style={{
-            ...topbar,
-            flexDirection: isMobile ? "column" : "row",
-            alignItems: isMobile ? "flex-start" : "center",
-            gap: isMobile ? "16px" : "0",
+            ...contentPad,
+            padding: isMobile ? "80px 16px 32px" : "88px 28px 40px",
           }}
         >
-          <div>
-            <h1 style={{ ...title, fontSize: isMobile ? "34px" : "38px" }}>
+          <header style={hero}>
+            <h1 style={{ ...title, fontSize: isMobile ? "30px" : "36px" }}>
               Settings
             </h1>
             <p style={subtitle}>
-              Manage your account preferences and Lexora experience.
+              Manage your Lexora profile, password, and account options.
             </p>
+          </header>
+
+          <div
+            style={{
+              ...settingsGrid,
+              gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+            }}
+          >
+            <section style={settingsCard} aria-labelledby="profile-heading">
+              <div style={cardHeading}>
+                <div style={cardIcon}>
+                  <UserIcon size={20} aria-hidden />
+                </div>
+                <div>
+                  <h2 id="profile-heading" style={cardTitle}>
+                    Profile
+                  </h2>
+                  <p style={cardText}>Update the name shown on your account.</p>
+                </div>
+              </div>
+
+              <form onSubmit={handleSaveProfile} noValidate>
+                <label htmlFor="settings-full-name" style={label}>
+                  Full name
+                </label>
+                <input
+                  id="settings-full-name"
+                  name="fullName"
+                  className="lexora-settings-input"
+                  type="text"
+                  autoComplete="name"
+                  value={fullName}
+                  maxLength={100}
+                  disabled={isSavingProfile}
+                  onChange={(event) => {
+                    setFullName(event.target.value);
+                    setProfileError(null);
+                    setProfileSuccess(null);
+                  }}
+                  onFocus={() => setNameFocused(true)}
+                  onBlur={() => setNameFocused(false)}
+                  aria-invalid={Boolean(profileError)}
+                  style={{
+                    ...input,
+                    ...(nameFocused ? inputFocused : null),
+                    borderColor: profileError
+                      ? "#fca5a5"
+                      : nameFocused
+                        ? "#8b5cf6"
+                        : "#e2e8f0",
+                  }}
+                />
+
+                <label htmlFor="settings-email" style={label}>
+                  Email address
+                </label>
+                <input
+                  id="settings-email"
+                  name="email"
+                  type="email"
+                  value={email}
+                  disabled
+                  autoComplete="email"
+                  style={{ ...input, opacity: 0.7, cursor: "not-allowed" }}
+                />
+                <p style={helpText}>
+                  Email changes are not available from Settings yet.
+                </p>
+
+                {profileError ? (
+                  <div style={errorBox} role="alert">
+                    <AlertCircle size={16} aria-hidden />
+                    <span>{profileError}</span>
+                  </div>
+                ) : null}
+
+                {profileSuccess ? (
+                  <div style={successBox} role="status">
+                    <CheckCircle2 size={16} aria-hidden />
+                    <span>{profileSuccess}</span>
+                  </div>
+                ) : null}
+
+                <button
+                  type="submit"
+                  className="lexora-settings-btn"
+                  disabled={isSavingProfile}
+                  style={{
+                    ...primaryButton,
+                    opacity: isSavingProfile ? 0.7 : 1,
+                    cursor: isSavingProfile ? "wait" : "pointer",
+                  }}
+                >
+                  <Save size={16} aria-hidden />
+                  {isSavingProfile ? "Saving..." : "Save profile"}
+                </button>
+              </form>
+            </section>
+
+            <section style={settingsCard} aria-labelledby="security-heading">
+              <div style={cardHeading}>
+                <div style={cardIcon}>
+                  <Shield size={20} aria-hidden />
+                </div>
+                <div>
+                  <h2 id="security-heading" style={cardTitle}>
+                    Password & security
+                  </h2>
+                  <p style={cardText}>
+                    Change your password while signed in.
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={handleUpdatePassword} noValidate>
+                <label htmlFor="settings-new-password" style={label}>
+                  New password
+                </label>
+                <div
+                  style={{
+                    ...inputWithIcon,
+                    ...(newPasswordFocused ? inputFocused : null),
+                    borderColor: passwordError
+                      ? "#fca5a5"
+                      : newPasswordFocused
+                        ? "#8b5cf6"
+                        : "#e2e8f0",
+                  }}
+                >
+                  <KeyRound size={18} color="#94a3b8" aria-hidden />
+                  <input
+                    id="settings-new-password"
+                    name="newPassword"
+                    className="lexora-settings-input"
+                    type={showNewPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    placeholder="Enter a new password"
+                    value={newPassword}
+                    disabled={isUpdatingPassword}
+                    onChange={(event) => {
+                      setNewPassword(event.target.value);
+                      setPasswordError(null);
+                      setPasswordSuccess(null);
+                    }}
+                    onFocus={() => setNewPasswordFocused(true)}
+                    onBlur={() => setNewPasswordFocused(false)}
+                    aria-invalid={Boolean(passwordError)}
+                    style={innerInput}
+                  />
+                  <button
+                    type="button"
+                    className="lexora-settings-toggle"
+                    onClick={() => setShowNewPassword((prev) => !prev)}
+                    aria-label={
+                      showNewPassword ? "Hide new password" : "Show new password"
+                    }
+                    style={visibilityButton}
+                  >
+                    {showNewPassword ? (
+                      <EyeOff size={18} />
+                    ) : (
+                      <Eye size={18} />
+                    )}
+                  </button>
+                </div>
+
+                <label htmlFor="settings-confirm-password" style={label}>
+                  Confirm new password
+                </label>
+                <div
+                  style={{
+                    ...inputWithIcon,
+                    ...(confirmFocused ? inputFocused : null),
+                    borderColor: passwordError
+                      ? "#fca5a5"
+                      : confirmFocused
+                        ? "#8b5cf6"
+                        : "#e2e8f0",
+                  }}
+                >
+                  <KeyRound size={18} color="#94a3b8" aria-hidden />
+                  <input
+                    id="settings-confirm-password"
+                    name="confirmPassword"
+                    className="lexora-settings-input"
+                    type={showConfirmPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    placeholder="Confirm your new password"
+                    value={confirmPassword}
+                    disabled={isUpdatingPassword}
+                    onChange={(event) => {
+                      setConfirmPassword(event.target.value);
+                      setPasswordError(null);
+                      setPasswordSuccess(null);
+                    }}
+                    onFocus={() => setConfirmFocused(true)}
+                    onBlur={() => setConfirmFocused(false)}
+                    aria-invalid={Boolean(passwordError)}
+                    style={innerInput}
+                  />
+                  <button
+                    type="button"
+                    className="lexora-settings-toggle"
+                    onClick={() => setShowConfirmPassword((prev) => !prev)}
+                    aria-label={
+                      showConfirmPassword
+                        ? "Hide confirm password"
+                        : "Show confirm password"
+                    }
+                    style={visibilityButton}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff size={18} />
+                    ) : (
+                      <Eye size={18} />
+                    )}
+                  </button>
+                </div>
+
+                <p style={helpText}>
+                  Use at least 8 characters with an uppercase letter, a lowercase
+                  letter, and a number.
+                </p>
+
+                {passwordError ? (
+                  <div style={errorBox} role="alert">
+                    <AlertCircle size={16} aria-hidden />
+                    <span>{passwordError}</span>
+                  </div>
+                ) : null}
+
+                {passwordSuccess ? (
+                  <div style={successBox} role="status">
+                    <CheckCircle2 size={16} aria-hidden />
+                    <span>{passwordSuccess}</span>
+                  </div>
+                ) : null}
+
+                <button
+                  type="submit"
+                  className="lexora-settings-btn"
+                  disabled={isUpdatingPassword}
+                  style={{
+                    ...primaryButton,
+                    opacity: isUpdatingPassword ? 0.7 : 1,
+                    cursor: isUpdatingPassword ? "wait" : "pointer",
+                  }}
+                >
+                  <KeyRound size={16} aria-hidden />
+                  {isUpdatingPassword ? "Updating..." : "Update password"}
+                </button>
+              </form>
+            </section>
+
+            <section style={settingsCard} aria-labelledby="plan-heading">
+              <div style={cardHeading}>
+                <div style={cardIcon}>
+                  <CreditCard size={20} aria-hidden />
+                </div>
+                <div>
+                  <h2 id="plan-heading" style={cardTitle}>
+                    Plan
+                  </h2>
+                  <p style={cardText}>
+                    View your current Lexora access and available upgrades.
+                  </p>
+                </div>
+              </div>
+
+              <div style={planBox}>
+                <div>
+                  <p style={planLabel}>Current access</p>
+                  <p style={planValue}>Free plan</p>
+                  <p style={cardText}>
+                    {dailyLimit} rewrites per day. Paid plan status will appear
+                    here once billing verification is connected.
+                  </p>
+                </div>
+                <Link
+                  href="/pricing"
+                  className="lexora-settings-outline"
+                  style={outlineButton}
+                >
+                  View plans
+                </Link>
+              </div>
+            </section>
+
+            <section style={settingsCard} aria-labelledby="account-heading">
+              <div style={cardHeading}>
+                <div style={cardIcon}>
+                  <LifeBuoy size={20} aria-hidden />
+                </div>
+                <div>
+                  <h2 id="account-heading" style={cardTitle}>
+                    Account
+                  </h2>
+                  <p style={cardText}>
+                    Sign out or get help with account requests.
+                  </p>
+                </div>
+              </div>
+
+              <div style={accountStack}>
+                <div style={securityRow}>
+                  <div>
+                    <h3 style={securityTitle}>Sign out</h3>
+                    <p style={cardText}>
+                      End your session on this device.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="lexora-settings-danger"
+                    onClick={handleLogout}
+                    disabled={isSigningOut}
+                    style={{
+                      ...dangerButton,
+                      opacity: isSigningOut ? 0.7 : 1,
+                      cursor: isSigningOut ? "wait" : "pointer",
+                    }}
+                  >
+                    <LogOut size={16} aria-hidden />
+                    {isSigningOut ? "Signing out..." : "Sign out"}
+                  </button>
+                </div>
+
+                {signOutError ? (
+                  <div style={errorBox} role="alert">
+                    <AlertCircle size={16} aria-hidden />
+                    <span>{signOutError}</span>
+                  </div>
+                ) : null}
+
+                <div style={divider} />
+
+                <div style={securityRow}>
+                  <div>
+                    <h3 style={securityTitle}>Need account help?</h3>
+                    <p style={cardText}>
+                      Contact Support for billing questions or account deletion
+                      requests.
+                    </p>
+                  </div>
+                  <Link
+                    href="/support"
+                    className="lexora-settings-outline"
+                    style={outlineButton}
+                  >
+                    Contact support
+                  </Link>
+                </div>
+
+                <p style={legalLinks}>
+                  <Link
+                    href="/privacy"
+                    className="lexora-settings-link"
+                    style={inlineLink}
+                  >
+                    Privacy Policy
+                  </Link>
+                  <span aria-hidden> · </span>
+                  <Link
+                    href="/terms"
+                    className="lexora-settings-link"
+                    style={inlineLink}
+                  >
+                    Terms of Service
+                  </Link>
+                </p>
+              </div>
+            </section>
           </div>
-
-          <button onClick={saveProfile} style={saveButton}>
-            <Save size={18} /> {saving ? "Saving..." : "Save Changes"}
-          </button>
-        </header>
-        <div
-          style={{
-            ...settingsGrid,
-            gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-          }}
-        >
-          <section style={settingsCard}>
-            <div style={cardHeading}>
-              <div style={cardIcon}>
-                <User size={20} />
-              </div>
-              <div>
-                <h2 style={cardTitle}>Profile</h2>
-                <p style={cardText}>Update your personal information.</p>
-              </div>
-            </div>
-
-            <label style={label}>Full Name</label>
-            <input
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="Enter your full name"
-              style={input}
-            />
-
-            <label style={label}>Email Address</label>
-            <input value={email} disabled style={{ ...input, opacity: 0.65 }} />
-
-            <p style={helpText}>Your email address cannot be changed here.</p>
-          </section>
-
-          <section style={settingsCard}>
-            <div style={cardHeading}>
-              <div style={cardIcon}>
-                <Bell size={20} />
-              </div>
-              <div>
-                <h2 style={cardTitle}>Notifications</h2>
-                <p style={cardText}>Choose what updates you want to receive.</p>
-              </div>
-            </div>
-
-            <SettingToggle
-              title="Product updates"
-              text="Receive news about Lexora features and improvements."
-            />
-
-            <SettingToggle
-              title="Usage reminders"
-              text="Get notified when you are close to your plan limit."
-            />
-
-            <SettingToggle
-              title="Tips and writing advice"
-              text="Receive helpful tips to improve your writing."
-            />
-          </section>
-
-          <section style={settingsCard}>
-            <div style={cardHeading}>
-              <div style={cardIcon}>
-                <Palette size={20} />
-              </div>
-              <div>
-                <h2 style={cardTitle}>Writing Preferences</h2>
-                <p style={cardText}>Set your default humanizer preferences.</p>
-              </div>
-            </div>
-
-            <label style={label}>Default Tone</label>
-            <select style={input} defaultValue="Natural">
-              <option>Natural</option>
-              <option>Professional</option>
-              <option>Academic</option>
-              <option>Friendly</option>
-              <option>Creative</option>
-            </select>
-
-            <label style={label}>Default Mode</label>
-            <select style={input} defaultValue="Free">
-              <option>Free</option>
-              <option>Fast</option>
-              <option>Creative</option>
-              <option>Enhanced</option>
-            </select>
-          </section>
-
-          <section style={settingsCard}>
-            <div style={cardHeading}>
-              <div style={cardIcon}>
-                <Shield size={20} />
-              </div>
-              <div>
-                <h2 style={cardTitle}>Account & Security</h2>
-                <p style={cardText}>Manage your account security options.</p>
-              </div>
-            </div>
-
-            <div style={securityRow}>
-              <div>
-                <h3 style={securityTitle}>Password</h3>
-                <p style={cardText}>Keep your account secure with a strong password.</p>
-              </div>
-
-              <button
-                onClick={() => router.push("/login")}
-                style={outlineButton}
-              >
-                Change Password
-              </button>
-            </div>
-
-            <div style={line} />
-
-            <div style={securityRow}>
-              <div>
-                <h3 style={securityTitle}>Current Plan</h3>
-                <p style={cardText}>You are currently using the Free plan.</p>
-              </div>
-
-              <button
-                onClick={() => router.push("/pricing")}
-                style={outlineButton}
-              >
-                View Plans
-              </button>
-            </div>
-          </section>
         </div>
       </section>
     </main>
   );
 }
 
-function SettingToggle({ title, text }: { title: string; text: string }) {
-  const [enabled, setEnabled] = useState(true);
-
-  return (
-    <div style={toggleRow}>
-      <div>
-        <h3 style={toggleTitle}>{title}</h3>
-        <p style={cardText}>{text}</p>
-      </div>
-
-      <button
-        type="button"
-        onClick={() => setEnabled(!enabled)}
-        style={{
-          ...toggle,
-          background: enabled ? "#7c3aed" : "#d1d5db",
-        }}
-      >
-        <span
-          style={{
-            ...toggleCircle,
-            transform: enabled ? "translateX(20px)" : "translateX(2px)",
-          }}
-        />
-      </button>
-    </div>
-  );
-}
-
-const page = {
+const pageShell = {
   minHeight: "100vh",
-  background: "#f8fafc",
+  display: "flex",
+  backgroundImage:
+    "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(139, 92, 246, 0.08), transparent 55%), linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)",
+  backgroundColor: "#f8fafc",
   color: "#0f172a",
-  fontFamily: "Arial, sans-serif",
-  display: "flex",
 };
 
-const sidebar = {
-  width: "270px",
-  minHeight: "100vh",
+const loadingCard = {
+  width: "100%",
+  maxWidth: "420px",
+  margin: "40px 16px",
   background: "#ffffff",
-  borderRight: "1px solid #e5e7eb",
-  padding: "32px 20px",
-  boxSizing: "border-box" as const,
-  flexDirection: "column" as const,
-};
-
-const logo = {
-  fontSize: "28px",
-  margin: "0 0 40px",
-  fontWeight: "800",
-};
-
-const nav = {
-  display: "flex",
-  flexDirection: "column" as const,
-  gap: "10px",
-};
-
-const navItem = {
-  border: "none",
-  background: "transparent",
-  padding: "14px 16px",
-  borderRadius: "12px",
-  display: "flex",
-  alignItems: "center",
-  gap: "12px",
-  color: "#334155",
-  fontWeight: "700",
-  fontSize: "15px",
-  cursor: "pointer",
-  textAlign: "left" as const,
-};
-
-const activeNav = {
-  ...navItem,
-  background: "#f0e4ff",
-  color: "#7c3aed",
-};
-
-const upgradeBox = {
-  marginTop: "auto",
-  background: "#faf5ff",
-  border: "1px solid #e9d5ff",
+  border: "1px solid #e2e8f0",
   borderRadius: "16px",
-  padding: "20px",
-};
-
-const mutedSmall = {
+  padding: "28px 24px",
+  textAlign: "center" as const,
   color: "#64748b",
   fontSize: "14px",
-  lineHeight: "1.5",
+  boxShadow: "0 12px 36px rgba(15, 23, 42, 0.06)",
 };
 
-const upgradeButton = {
+const contentShell = {
+  flex: 1,
+  minWidth: 0,
   width: "100%",
-  border: "none",
-  borderRadius: "10px",
-  padding: "12px",
-  background: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
-  color: "#ffffff",
-  fontWeight: "800",
-  cursor: "pointer",
 };
 
-const mobileHeader = {
-  position: "fixed" as const,
-  top: 0,
-  left: 0,
-  right: 0,
-  height: "64px",
-  background: "#ffffff",
-  borderBottom: "1px solid #e5e7eb",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  padding: "0 14px",
-  zIndex: 1000,
+const contentPad = {
+  width: "100%",
+  maxWidth: "1120px",
+  margin: "0 auto",
   boxSizing: "border-box" as const,
 };
 
-const menuButton = {
-  width: "34px",
-  height: "34px",
-  borderRadius: "10px",
-  border: "1px solid #e5e7eb",
-  background: "#ffffff",
-  fontSize: "20px",
-  cursor: "pointer",
-};
-
-const brandWrap = {
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-};
-
-const brandIcon = {
-  width: "30px",
-  height: "30px",
-  background: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
-  clipPath: "polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const brandMark = {
-  width: "11px",
-  height: "14px",
-  borderLeft: "4px solid white",
-  borderBottom: "4px solid white",
-};
-
-const headerLogo = {
-  margin: 0,
-  fontSize: "21px",
-  fontWeight: "800",
-};
-
-const headerActions = {
-  display: "flex",
-  alignItems: "center",
-  gap: "7px",
-};
-
-const headerSmallButton = {
-  border: "none",
-  background: "transparent",
-  fontWeight: "700",
-  cursor: "pointer",
-  padding: "8px",
-};
-
-const headerPurpleButton = {
-  border: "none",
-  background: "#7c3aed",
-  color: "#ffffff",
-  borderRadius: "8px",
-  padding: "8px 10px",
-  fontWeight: "700",
-  cursor: "pointer",
-};
-
-const avatar = {
-  width: "34px",
-  height: "34px",
-  borderRadius: "50%",
-  background: "#7c3aed",
-  color: "#ffffff",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontWeight: "800",
-};
-
-const mobileMenu = {
-  position: "fixed" as const,
-  top: "72px",
-  left: "12px",
-  right: "12px",
-  background: "#ffffff",
-  borderRadius: "16px",
-  padding: "10px",
-  boxShadow: "0 16px 35px rgba(15,23,42,0.18)",
-  zIndex: 999,
-};
-
-const mobileMenuItem = {
-  width: "100%",
-  textAlign: "left" as const,
-  border: "none",
-  background: "#f8fafc",
-  padding: "14px 12px",
-  marginBottom: "8px",
-  borderRadius: "10px",
-  color: "#0f172a",
-  fontWeight: "700",
-  cursor: "pointer",
-};
-
-const topbar = {
-  display: "flex",
-  justifyContent: "space-between",
-  marginBottom: "30px",
+const hero = {
+  marginBottom: "24px",
 };
 
 const title = {
-  margin: 0,
-  fontWeight: "800",
+  margin: "0 0 8px",
+  color: "#0f172a",
+  fontWeight: 700 as const,
+  letterSpacing: "-0.03em",
+  lineHeight: 1.15,
 };
 
 const subtitle = {
+  margin: 0,
   color: "#64748b",
   fontSize: "16px",
-  marginTop: "10px",
-};
-
-const saveButton = {
-  border: "none",
-  borderRadius: "10px",
-  padding: "13px 18px",
-  background: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
-  color: "#ffffff",
-  fontWeight: "800",
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-  cursor: "pointer",
+  lineHeight: 1.6,
+  maxWidth: "560px",
 };
 
 const settingsGrid = {
   display: "grid",
-  gap: "22px",
+  gap: "18px",
+  alignItems: "start",
 };
 
 const settingsCard = {
   background: "#ffffff",
-  border: "1px solid #e5e7eb",
+  border: "1px solid #e2e8f0",
   borderRadius: "18px",
-  padding: "24px",
+  padding: "22px 18px",
+  boxShadow: "0 10px 28px rgba(15, 23, 42, 0.05)",
   boxSizing: "border-box" as const,
 };
 
 const cardHeading = {
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   gap: "12px",
-  marginBottom: "24px",
+  marginBottom: "18px",
 };
 
 const cardIcon = {
@@ -629,75 +872,171 @@ const cardIcon = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
+  flexShrink: 0,
 };
 
 const cardTitle = {
   margin: 0,
-  fontSize: "19px",
+  fontSize: "18px",
+  fontWeight: 700 as const,
+  color: "#0f172a",
 };
 
 const cardText = {
   margin: "5px 0 0",
   color: "#64748b",
   fontSize: "14px",
-  lineHeight: "1.5",
+  lineHeight: 1.5,
 };
 
 const label = {
   display: "block",
-  margin: "18px 0 8px",
-  fontWeight: "700",
-  fontSize: "14px",
+  margin: "0 0 8px",
+  fontWeight: 600 as const,
+  fontSize: "13px",
+  color: "#334155",
 };
 
 const input = {
   width: "100%",
   boxSizing: "border-box" as const,
   padding: "12px 14px",
-  borderRadius: "10px",
-  border: "1px solid #dbe2ea",
+  borderRadius: "12px",
+  border: "1px solid #e2e8f0",
   fontSize: "15px",
   outline: "none",
   background: "#ffffff",
+  color: "#0f172a",
+  fontFamily: "inherit",
+  minHeight: "48px",
+  marginBottom: "14px",
+  transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+};
+
+const inputFocused = {
+  boxShadow: "0 0 0 3px rgba(139, 92, 246, 0.15)",
+};
+
+const inputWithIcon = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  border: "1px solid #e2e8f0",
+  borderRadius: "12px",
+  padding: "0 12px",
+  background: "#ffffff",
+  minHeight: "48px",
+  marginBottom: "14px",
+  transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+};
+
+const innerInput = {
+  flex: 1,
+  padding: "12px 0",
+  border: "none",
+  outline: "none",
+  fontSize: "15px",
+  background: "transparent",
+  color: "#0f172a",
+  fontFamily: "inherit",
+  minWidth: 0,
+};
+
+const visibilityButton = {
+  border: "none",
+  background: "transparent",
+  color: "#64748b",
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "6px",
+  minWidth: "36px",
+  minHeight: "36px",
 };
 
 const helpText = {
-  margin: "8px 0 0",
+  margin: "-6px 0 14px",
   color: "#94a3b8",
   fontSize: "12px",
+  lineHeight: 1.5,
 };
 
-const toggleRow = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: "15px",
-  padding: "16px 0",
-  borderBottom: "1px solid #eef2f7",
-};
-
-const toggleTitle = {
-  margin: 0,
-  fontSize: "15px",
-};
-
-const toggle = {
-  width: "44px",
-  height: "24px",
-  borderRadius: "99px",
+const primaryButton = {
+  width: "100%",
+  minHeight: "48px",
+  borderRadius: "12px",
   border: "none",
-  padding: 0,
+  background: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
+  color: "#ffffff",
+  fontWeight: 700 as const,
+  fontSize: "14px",
   cursor: "pointer",
-  transition: "0.2s",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "8px",
+  fontFamily: "inherit",
 };
 
-const toggleCircle = {
-  display: "block",
-  width: "20px",
-  height: "20px",
-  borderRadius: "50%",
+const outlineButton = {
+  border: "1px solid #ddd6fe",
   background: "#ffffff",
-  transition: "0.2s",
+  color: "#7c3aed",
+  borderRadius: "10px",
+  padding: "10px 14px",
+  fontWeight: 700 as const,
+  cursor: "pointer",
+  whiteSpace: "nowrap" as const,
+  textDecoration: "none",
+  fontSize: "13px",
+  minHeight: "44px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontFamily: "inherit",
+  boxSizing: "border-box" as const,
+};
+
+const dangerButton = {
+  ...outlineButton,
+  border: "1px solid #fecaca",
+  color: "#b91c1c",
+  background: "#ffffff",
+  gap: "6px",
+};
+
+const planBox = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "16px",
+  flexWrap: "wrap" as const,
+  background: "#faf5ff",
+  border: "1px solid #e9d5ff",
+  borderRadius: "14px",
+  padding: "16px",
+};
+
+const planLabel = {
+  margin: 0,
+  color: "#64748b",
+  fontSize: "12px",
+  fontWeight: 600 as const,
+  textTransform: "uppercase" as const,
+  letterSpacing: "0.04em",
+};
+
+const planValue = {
+  margin: "4px 0 6px",
+  fontSize: "20px",
+  fontWeight: 700 as const,
+  color: "#0f172a",
+};
+
+const accountStack = {
+  display: "grid",
+  gap: "16px",
 };
 
 const securityRow = {
@@ -705,26 +1044,57 @@ const securityRow = {
   justifyContent: "space-between",
   alignItems: "center",
   gap: "16px",
+  flexWrap: "wrap" as const,
 };
 
 const securityTitle = {
   margin: 0,
   fontSize: "15px",
+  fontWeight: 700 as const,
+  color: "#0f172a",
 };
 
-const outlineButton = {
-  border: "1px solid #d8b4fe",
-  background: "#faf5ff",
-  color: "#7c3aed",
-  borderRadius: "9px",
-  padding: "10px 12px",
-  fontWeight: "700",
-  cursor: "pointer",
-  whiteSpace: "nowrap" as const,
-};
-
-const line = {
+const divider = {
   height: "1px",
   background: "#eef2f7",
-  margin: "20px 0",
+};
+
+const legalLinks = {
+  margin: 0,
+  color: "#94a3b8",
+  fontSize: "13px",
+};
+
+const inlineLink = {
+  color: "#7c3aed",
+  textDecoration: "none",
+  fontWeight: 600 as const,
+};
+
+const errorBox = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "8px",
+  marginBottom: "14px",
+  padding: "12px 14px",
+  borderRadius: "10px",
+  background: "#fef2f2",
+  border: "1px solid #fecaca",
+  color: "#b91c1c",
+  fontSize: "14px",
+  lineHeight: 1.5,
+};
+
+const successBox = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "8px",
+  marginBottom: "14px",
+  padding: "12px 14px",
+  borderRadius: "10px",
+  background: "#f0fdf4",
+  border: "1px solid #bbf7d0",
+  color: "#15803d",
+  fontSize: "14px",
+  lineHeight: 1.5,
 };
