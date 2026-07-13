@@ -94,6 +94,11 @@ export default function Home() {
     router.push(path);
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
+  };
+
   const humanizeText = async () => {
     if (loading) return;
 
@@ -257,7 +262,12 @@ export default function Home() {
           "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(139, 92, 246, 0.08), transparent 55%), linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)",
       }}
     >
-      <Sidebar isMobile={isMobile} onNavigate={navigate} />
+      <Sidebar
+        isMobile={isMobile}
+        onNavigate={navigate}
+        activePath="/"
+        onLogout={session ? handleLogout : undefined}
+      />
 
       <section
         style={{
@@ -274,6 +284,7 @@ export default function Home() {
           session={session}
           uses={uses}
           getUserInitial={getUserInitial}
+          onLogout={session ? handleLogout : undefined}
         />
 
         <div

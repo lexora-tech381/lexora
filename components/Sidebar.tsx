@@ -8,16 +8,19 @@ import {
   CreditCard,
   Settings,
   LifeBuoy,
+  LogOut,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 
 type SidebarProps = {
   isMobile: boolean;
   onNavigate: (path: string) => void;
+  activePath?: string;
+  onLogout?: () => void;
 };
 
 const NAV_ITEMS = [
-  { label: "Humanizer", path: "/", icon: PenSquare, active: true },
+  { label: "Humanizer", path: "/", icon: PenSquare },
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { label: "Documents", path: "/documents", icon: FileText },
   { label: "Usage", path: "/usage", icon: BarChart3 },
@@ -26,7 +29,12 @@ const NAV_ITEMS = [
   { label: "Support", path: "/support", icon: LifeBuoy },
 ] as const;
 
-export default function Sidebar({ isMobile, onNavigate }: SidebarProps) {
+export default function Sidebar({
+  isMobile,
+  onNavigate,
+  activePath = "/",
+  onLogout,
+}: SidebarProps) {
   return (
     <aside
       style={{
@@ -43,6 +51,16 @@ export default function Sidebar({ isMobile, onNavigate }: SidebarProps) {
           filter: brightness(1.06);
           transform: translateY(-1px);
         }
+        .lexora-logout-btn:hover {
+          background: #fef2f2;
+          color: #b91c1c;
+        }
+        .lexora-nav-item:focus-visible,
+        .lexora-upgrade-btn:focus-visible,
+        .lexora-logout-btn:focus-visible {
+          outline: 2px solid #8b5cf6;
+          outline-offset: 2px;
+        }
       `}</style>
 
       <div>
@@ -50,9 +68,9 @@ export default function Sidebar({ isMobile, onNavigate }: SidebarProps) {
           <BrandLogo />
         </div>
 
-        <nav style={nav}>
-          {NAV_ITEMS.map(({ label, path, icon: Icon, ...rest }) => {
-            const isActive = "active" in rest && rest.active;
+        <nav style={nav} aria-label="Main navigation">
+          {NAV_ITEMS.map(({ label, path, icon: Icon }) => {
+            const isActive = activePath === path;
             return (
               <button
                 key={label}
@@ -62,12 +80,25 @@ export default function Sidebar({ isMobile, onNavigate }: SidebarProps) {
                 }}
                 className={`lexora-nav-item${isActive ? " lexora-nav-active" : ""}`}
                 style={isActive ? activeNav : navItem}
+                aria-current={isActive ? "page" : undefined}
               >
                 <Icon size={18} strokeWidth={2} />
                 {label}
               </button>
             );
           })}
+
+          {onLogout ? (
+            <button
+              type="button"
+              className="lexora-logout-btn"
+              onClick={onLogout}
+              style={logoutItem}
+            >
+              <LogOut size={18} strokeWidth={2} />
+              Logout
+            </button>
+          ) : null}
         </nav>
       </div>
 
@@ -133,6 +164,11 @@ const navItem = {
   color: "#64748b",
   fontWeight: 500 as const,
   cursor: "pointer",
+};
+
+const logoutItem = {
+  ...navItem,
+  marginTop: "8px",
 };
 
 const upgradeBox = {

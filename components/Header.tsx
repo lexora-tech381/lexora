@@ -12,6 +12,9 @@ type HeaderProps = {
   session: Session | null;
   uses: number;
   getUserInitial: (user: Session["user"]) => string;
+  planName?: string;
+  dailyLimit?: number;
+  onLogout?: () => void;
 };
 
 const MOBILE_LINKS = [
@@ -33,6 +36,9 @@ export default function Header({
   session,
   uses,
   getUserInitial,
+  planName = "Free",
+  dailyLimit = 10,
+  onLogout,
 }: HeaderProps) {
   return (
     <>
@@ -46,6 +52,12 @@ export default function Header({
         .lexora-mobile-item:hover {
           background: #f3e8ff;
           color: #6d28d9;
+        }
+        .lexora-header-btn:focus-visible,
+        .lexora-header-cta:focus-visible,
+        .lexora-mobile-item:focus-visible {
+          outline: 2px solid #8b5cf6;
+          outline-offset: 2px;
         }
       `}</style>
 
@@ -72,19 +84,21 @@ export default function Header({
             </div>
           ) : (
             <div style={metaGroup}>
-              <span style={planBadge}>Free Plan</span>
+              <span style={planBadge}>{planName} Plan</span>
               <span style={usageBadge}>
-                <span style={usageCount}>{uses}</span> / 10 uses today
+                <span style={usageCount}>{uses}</span> / {dailyLimit} uses today
               </span>
             </div>
           )}
 
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "8px" }}>
             {isMobile && (
-              <span style={usageBadgeCompact}>{uses}/10</span>
+              <span style={usageBadgeCompact}>
+                {uses}/{dailyLimit}
+              </span>
             )}
             {session ? (
-              <div style={avatar} title="Account">
+              <div style={avatar} title="Account" aria-label="Account">
                 {getUserInitial(session.user)}
               </div>
             ) : (
@@ -127,6 +141,19 @@ export default function Header({
               {label}
             </button>
           ))}
+          {onLogout ? (
+            <button
+              type="button"
+              className="lexora-mobile-item"
+              onClick={() => {
+                onCloseMenu();
+                onLogout();
+              }}
+              style={{ ...mobileMenuItem, color: "#b91c1c" }}
+            >
+              Logout
+            </button>
+          ) : null}
         </nav>
       )}
     </>
@@ -268,4 +295,5 @@ const mobileMenuItem = {
   cursor: "pointer",
   fontSize: "15px",
   transition: "background 0.15s ease, color 0.15s ease",
+  minHeight: "44px",
 };
