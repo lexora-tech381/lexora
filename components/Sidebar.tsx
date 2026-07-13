@@ -41,6 +41,7 @@ export default function Sidebar({
         ...sidebar,
         display: isMobile ? "none" : "flex",
       }}
+      aria-label="Lexora sidebar"
     >
       <style>{`
         .lexora-nav-item:hover:not(.lexora-nav-active) {
@@ -64,7 +65,7 @@ export default function Sidebar({
       `}</style>
 
       <div style={navSection}>
-        <div style={{ marginBottom: "28px", paddingLeft: "4px" }}>
+        <div style={logoWrap}>
           <BrandLogo />
         </div>
 
@@ -73,7 +74,7 @@ export default function Sidebar({
             const isActive = activePath === path;
             return (
               <button
-                key={label}
+                key={path}
                 type="button"
                 onClick={() => {
                   if (!isActive) onNavigate(path);
@@ -81,8 +82,9 @@ export default function Sidebar({
                 className={`lexora-nav-item${isActive ? " lexora-nav-active" : ""}`}
                 style={isActive ? activeNav : navItem}
                 aria-current={isActive ? "page" : undefined}
+                aria-label={label}
               >
-                <Icon size={18} strokeWidth={2} />
+                <Icon size={18} strokeWidth={2} aria-hidden />
                 {label}
               </button>
             );
@@ -94,8 +96,9 @@ export default function Sidebar({
               className="lexora-logout-btn"
               onClick={onLogout}
               style={logoutItem}
+              aria-label="Log out"
             >
-              <LogOut size={18} strokeWidth={2} />
+              <LogOut size={18} strokeWidth={2} aria-hidden />
               Logout
             </button>
           ) : null}
@@ -134,12 +137,18 @@ const sidebar = {
   position: "sticky" as const,
   top: 0,
   boxSizing: "border-box" as const,
+  fontFamily: "var(--font-geist-sans), system-ui, sans-serif",
 };
 
 const navSection = {
   flex: 1,
   minHeight: 0,
   overflowY: "auto" as const,
+};
+
+const logoWrap = {
+  marginBottom: "28px",
+  paddingLeft: "4px",
 };
 
 const nav = {
@@ -162,6 +171,7 @@ const activeNav = {
   fontSize: "14px",
   width: "100%",
   transition: "background 0.15s ease, color 0.15s ease",
+  fontFamily: "inherit",
 };
 
 const navItem = {
@@ -224,4 +234,5 @@ const upgradeButton = {
   fontSize: "14px",
   transition: "filter 0.15s ease, transform 0.15s ease",
   pointerEvents: "auto" as const,
+  fontFamily: "inherit",
 };
