@@ -1,12 +1,122 @@
 "use client";
 
-import { Suspense } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import { Lock, CreditCard, ShieldCheck, ArrowLeft } from "lucide-react";
+import { Suspense, useMemo, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { ArrowLeft, ExternalLink, Lock } from "lucide-react";
+
+type PlanId = "silver" | "gold" | "premium";
+type BillingCycle = "monthly" | "yearly";
+
+const PLAN_IDS: readonly PlanId[] = ["silver", "gold", "premium"];
+const BILLING_CYCLES: readonly BillingCycle[] = ["monthly", "yearly"];
+
+const POLAR_CHECKOUT = {
+  silverMonthly:
+    "https://buy.polar.sh/polar_cl_A7Nr0bKmhPcczc9dMY1ZTgA8z13e6ggrmuLxk1cj5Ab",
+  goldMonthly:
+    "https://buy.polar.sh/polar_cl_GbQaVEWBGt7jhATZjNFVdiarBKQlf6jvL613J3XSKAW",
+  premiumMonthly:
+    "https://buy.polar.sh/polar_cl_aqCr5DXtBm8ZlsWlWucMFte1AxjeIBu00EI0d2pgTWV",
+} as const;
+
+interface CheckoutPlan {
+  id: PlanId;
+  name: string;
+  allowance: string;
+  monthlyPrice: number;
+  yearlyPrice: number;
+  monthlyCheckoutUrl: string;
+  yearlyCheckoutUrl?: string;
+}
+
+const CHECKOUT_PLANS: Record<PlanId, CheckoutPlan> = {
+  silver: {
+    id: "silver",
+    name: "Silver",
+    allowance: "10,000 words per month",
+    monthlyPrice: 2.99,
+    yearlyPrice: 29,
+    monthlyCheckoutUrl: getCheckoutUrl(
+      process.env.NEXT_PUBLIC_POLAR_SILVER_MONTHLY_URL,
+      POLAR_CHECKOUT.silverMonthly,
+    ),
+    yearlyCheckoutUrl: getCheckoutUrl(
+      process.env.NEXT_PUBLIC_POLAR_SILVER_YEARLY_URL,
+    ),
+  },
+  gold: {
+    id: "gold",
+    name: "Gold",
+    allowance: "30,000 words per month",
+    monthlyPrice: 9.99,
+    yearlyPrice: 99,
+    monthlyCheckoutUrl: getCheckoutUrl(
+      process.env.NEXT_PUBLIC_POLAR_GOLD_MONTHLY_URL,
+      POLAR_CHECKOUT.goldMonthly,
+    ),
+    yearlyCheckoutUrl: getCheckoutUrl(
+      process.env.NEXT_PUBLIC_POLAR_GOLD_YEARLY_URL,
+    ),
+  },
+  premium: {
+    id: "premium",
+    name: "Premium",
+    allowance: "60,000 words per month",
+    monthlyPrice: 19.99,
+    yearlyPrice: 189,
+    monthlyCheckoutUrl: getCheckoutUrl(
+      process.env.NEXT_PUBLIC_POLAR_PREMIUM_MONTHLY_URL,
+      POLAR_CHECKOUT.premiumMonthly,
+    ),
+    yearlyCheckoutUrl: getCheckoutUrl(
+      process.env.NEXT_PUBLIC_POLAR_PREMIUM_YEARLY_URL,
+    ),
+  },
+};
+
+function getCheckoutUrl(envValue: string | undefined, fallback: string): string;
+function getCheckoutUrl(
+  envValue: string | undefined,
+  fallback?: string,
+): string | undefined;
+function getCheckoutUrl(
+  envValue: string | undefined,
+  fallback?: string,
+): string | undefined {
+  const fromEnv = envValue?.trim();
+  if (fromEnv) return fromEnv;
+  return fallback;
+}
+
+function isPlanId(value: string | null): value is PlanId {
+  return value !== null && (PLAN_IDS as readonly string[]).includes(value);
+}
+
+function isBillingCycle(value: string | null): value is BillingCycle {
+  return (
+    value !== null && (BILLING_CYCLES as readonly string[]).includes(value)
+  );
+}
+
+function formatMoney(amount: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
 
 export default function CheckoutPage() {
   return (
-    <Suspense fallback={<div style={{ padding: "40px" }}>Loading checkout...</div>}>
+    <Suspense
+      fallback={
+        <main style={page}>
+          <div style={loadingCard}>Loading checkout...</div>
+        </main>
+      }
+    >
       <CheckoutContent />
     </Suspense>
   );
@@ -14,128 +124,472 @@ export default function CheckoutPage() {
 
 function CheckoutContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const plan = searchParams.get("plan") || "gold";
-  const billing = searchParams.get("billing") || "monthly";
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
-  const prices: any = {
-    silver: billing === "yearly" ? "$29/year" : "$2.99/month",
-    gold: billing === "yearly" ? "$99/year" : "$9.99/month",
-    premium: billing === "yearly" ? "$189/year" : "$19.99/month",
-  };
+  const planParam = searchParams.get("plan");
+  const billingParam = searchParams.get("billing");
 
-  const words: any = {
-    silver: "10,000 words/month",
-    gold: "30,000 words/month",
-    premium: "60,000 words/month",
-  };
+  const validation = useMemo(() => {
+    if (!isPlanId(planParam) || !isBillingCycle(billingParam)) {
+      return { ok: false as const };
+    }
 
-  const planName = plan.charAt(0).toUpperCase() + plan.slice(1);
+    const plan = CHECKOUT_PLANS[planParam];
+    const billing = billingParam;
+    const checkoutUrl =
+      billing === "yearly" ? plan.yearlyCheckoutUrl : plan.monthlyCheckoutUrl;
+    const priceLabel =
+      billing === "yearly"
+        ? `${formatMoney(plan.yearlyPrice)}/year`
+        : `${formatMoney(plan.monthlyPrice)}/month`;
+
+    return {
+      ok: true as const,
+      plan,
+      billing,
+      checkoutUrl,
+      priceLabel,
+    };
+  }, [planParam, billingParam]);
+
+  function handleContinueToCheckout() {
+    if (!validation.ok || !validation.checkoutUrl || isRedirecting) return;
+
+    setIsRedirecting(true);
+    window.location.assign(validation.checkoutUrl);
+  }
+
+  if (!validation.ok) {
+    return (
+      <main style={page}>
+        <style>{checkoutFocusStyles}</style>
+        <PublicChrome />
+        <section style={shell}>
+          <div style={card}>
+            <h1 style={title}>Checkout unavailable</h1>
+            <p style={bodyText}>
+              This checkout link is missing a valid plan or billing cycle. Choose
+              a paid plan from Pricing to continue.
+            </p>
+            <p style={hintText}>
+              Valid plans: silver, gold, premium. Valid billing: monthly,
+              yearly.
+            </p>
+            <Link href="/pricing" className="lexora-checkout-link" style={primaryButton}>
+              Back to pricing
+            </Link>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  const { plan, billing, checkoutUrl, priceLabel } = validation;
+  const isYearlyUnavailable = billing === "yearly" && !checkoutUrl;
+  const isCheckoutMissing = !checkoutUrl;
 
   return (
     <main style={page}>
-      <button onClick={() => router.push("/pricing")} style={backButton}>
-        <ArrowLeft size={18} /> Back to pricing
-      </button>
+      <style>{checkoutFocusStyles}</style>
+      <PublicChrome />
 
-      <section style={checkoutCard}>
-        <div style={brandRow}>
-          <div style={logoHex}>
-            <div style={logoShape} />
-          </div>
-          <h2 style={brandName}>Lexora</h2>
-        </div>
+      <section style={shell}>
+        <Link href="/pricing" className="lexora-checkout-link" style={backLink}>
+          <ArrowLeft size={16} aria-hidden="true" />
+          Back to pricing
+        </Link>
 
-        <div style={header}>
-          <span style={secureBadge}>
-            <Lock size={16} /> Secure Checkout
-          </span>
-          <h1 style={title}>Complete your subscription</h1>
-          <p style={subtitle}>Review your plan and enter your payment details.</p>
-        </div>
-
-        <div style={planBox}>
-          <div>
-            <p style={muted}>Selected Plan</p>
-            <h2 style={{ margin: "5px 0" }}>{planName} Plan</h2>
-            <p style={muted}>{words[plan]}</p>
+        <div style={card}>
+          <div style={brandRow}>
+            <Link href="/" className="lexora-checkout-link" style={brandLink}>
+              Lexora
+            </Link>
+            <span style={secureBadge}>
+              <Lock size={14} aria-hidden="true" />
+              Polar checkout
+            </span>
           </div>
 
-          <div style={{ textAlign: "right" }}>
-            <p style={muted}>Billing</p>
-            <h2 style={{ margin: "5px 0" }}>{prices[plan]}</h2>
-            <p style={muted}>
-              {billing === "yearly" ? "Yearly billing" : "Monthly billing"}
-            </p>
-          </div>
-        </div>
-
-        <div style={summaryBox}>
-          <div style={summaryRow}><span>Plan</span><b>{planName}</b></div>
-          <div style={summaryRow}><span>Billing</span><b>{billing === "yearly" ? "Yearly" : "Monthly"}</b></div>
-          <div style={summaryRow}><span>Total</span><b>{prices[plan]}</b></div>
-        </div>
-
-        <form style={form}>
-          <label style={label}>Cardholder Name</label>
-          <input style={input} placeholder="Enter cardholder name" />
-
-          <label style={label}>Card Number</label>
-          <div style={inputWithIcon}>
-            <CreditCard size={18} color="#64748b" />
-            <input style={innerInput} placeholder="1234 5678 9012 3456" />
-          </div>
-
-          <div style={twoColumns}>
-            <div>
-              <label style={label}>Expiry Date</label>
-              <input style={input} placeholder="MM/YY" />
-            </div>
-
-            <div>
-              <label style={label}>CVV</label>
-              <input style={input} placeholder="123" />
-            </div>
-          </div>
-
-          <div style={securityRow}>
-            <span><Lock size={15} /> SSL encrypted</span>
-            <span><ShieldCheck size={15} /> Privacy protected</span>
-            <span><CreditCard size={15} /> Cards accepted</span>
-          </div>
-
-          <button type="button" style={payButton}>Pay Now</button>
-
-          <p style={safeNote}>
-            ✓ Cancel anytime · ✓ No hidden fees · ✓ Secure payment processing
+          <h1 style={title}>Confirm your plan</h1>
+          <p style={bodyText}>
+            Review your selection, then continue to Polar’s secure hosted
+            checkout to finish payment.
           </p>
-        </form>
+
+          <div style={planBox}>
+            <div>
+              <p style={mutedLabel}>Selected plan</p>
+              <p style={planName}>{plan.name}</p>
+              <p style={mutedText}>{plan.allowance}</p>
+            </div>
+            <div style={planPriceBlock}>
+              <p style={mutedLabel}>Billing</p>
+              <p style={planName}>{priceLabel}</p>
+              <p style={mutedText}>
+                {billing === "yearly" ? "Yearly billing" : "Monthly billing"}
+              </p>
+            </div>
+          </div>
+
+          <div style={summaryBox} aria-label="Order summary">
+            <div style={summaryRow}>
+              <span>Plan</span>
+              <strong>{plan.name}</strong>
+            </div>
+            <div style={summaryRow}>
+              <span>Allowance</span>
+              <strong>{plan.allowance}</strong>
+            </div>
+            <div style={summaryRow}>
+              <span>Billing cycle</span>
+              <strong>{billing === "yearly" ? "Yearly" : "Monthly"}</strong>
+            </div>
+            <div style={{ ...summaryRow, borderBottom: "none" }}>
+              <span>Total due today</span>
+              <strong>{priceLabel}</strong>
+            </div>
+          </div>
+
+          {isYearlyUnavailable ? (
+            <div style={noticeBox} role="status">
+              <p style={noticeTitle}>Yearly billing coming soon</p>
+              <p style={noticeText}>
+                Yearly checkout is not available for {plan.name} yet. Choose
+                monthly billing on the Pricing page, or check back later.
+              </p>
+              <Link
+                href="/pricing"
+                className="lexora-checkout-link"
+                style={secondaryButton}
+              >
+                Choose another option
+              </Link>
+            </div>
+          ) : isCheckoutMissing ? (
+            <div style={noticeBox} role="alert">
+              <p style={noticeTitle}>Checkout temporarily unavailable</p>
+              <p style={noticeText}>
+                A Polar checkout link is not available for this plan right now.
+                Please try again later from Pricing.
+              </p>
+              <Link
+                href="/pricing"
+                className="lexora-checkout-link"
+                style={secondaryButton}
+              >
+                Back to pricing
+              </Link>
+            </div>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={handleContinueToCheckout}
+                disabled={isRedirecting}
+                style={{
+                  ...primaryButton,
+                  opacity: isRedirecting ? 0.75 : 1,
+                  cursor: isRedirecting ? "wait" : "pointer",
+                }}
+              >
+                {isRedirecting ? "Opening Polar..." : "Continue to secure checkout"}
+                {!isRedirecting ? (
+                  <ExternalLink size={16} aria-hidden="true" />
+                ) : null}
+              </button>
+              <p style={safeNote}>
+                Payment details will be entered securely on Polar’s checkout
+                page.
+              </p>
+            </>
+          )}
+        </div>
       </section>
     </main>
   );
 }
 
-const page = { minHeight: "100vh", background: "#f8fafc", color: "#0f172a", fontFamily: "Arial, sans-serif", padding: "45px 20px" };
-const backButton = { display: "flex", alignItems: "center", gap: "8px", margin: "0 auto 22px", maxWidth: "820px", background: "transparent", border: "none", color: "#7c3aed", fontWeight: "bold" as const, cursor: "pointer", fontSize: "15px" };
-const checkoutCard = { maxWidth: "820px", margin: "0 auto", background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "24px", padding: "34px", boxShadow: "0 20px 50px rgba(15,23,42,0.08)" };
-const brandRow = { display: "flex", alignItems: "center", gap: "12px", marginBottom: "24px" };
-const logoHex = { width: "56px", height: "56px", background: "linear-gradient(135deg,#5b21b6,#c084fc)", clipPath: "polygon(25% 6%,75% 6%,100% 50%,75% 94%,25% 94%,0% 50%)", display: "flex", alignItems: "center", justifyContent: "center" };
-const logoShape = { width: "22px", height: "30px", borderLeft: "8px solid white", borderBottom: "8px solid white", borderBottomLeftRadius: "10px", transform: "translateY(-2px)" };
-const brandName = { margin: 0, fontSize: "26px", fontWeight: 800, color: "#111827" };
-const header = { textAlign: "center" as const, marginBottom: "28px" };
-const secureBadge = { display: "inline-flex", alignItems: "center", gap: "7px", background: "#f3e8ff", color: "#7c3aed", padding: "8px 14px", borderRadius: "999px", fontWeight: "bold" as const, marginBottom: "12px" };
-const title = { margin: "8px 0", fontSize: "34px" };
-const subtitle = { color: "#64748b", margin: 0 };
-const planBox = { display: "flex", justifyContent: "space-between", gap: "20px", background: "#faf5ff", border: "1px solid #e9d5ff", borderRadius: "18px", padding: "22px", marginBottom: "22px" };
-const summaryBox = { border: "1px solid #e5e7eb", borderRadius: "16px", padding: "18px", marginBottom: "24px" };
-const summaryRow = { display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #f1f5f9" };
-const form = { display: "grid", gap: "12px" };
-const label = { fontWeight: "bold" as const, color: "#334155", marginTop: "6px" };
-const input = { width: "100%", padding: "15px", borderRadius: "13px", border: "1px solid #dbe3ef", outline: "none", fontSize: "15px", boxSizing: "border-box" as const };
-const inputWithIcon = { display: "flex", alignItems: "center", gap: "10px", padding: "0 15px", borderRadius: "13px", border: "1px solid #dbe3ef" };
-const innerInput = { flex: 1, padding: "15px 0", border: "none", outline: "none", fontSize: "15px" };
-const twoColumns = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" };
-const securityRow = { display: "flex", justifyContent: "space-between", gap: "10px", color: "#64748b", fontSize: "14px", marginTop: "8px", flexWrap: "wrap" as const };
-const payButton = { marginTop: "12px", height: "56px", borderRadius: "14px", border: "none", background: "linear-gradient(135deg,#8b5cf6,#7c3aed)", color: "white", fontSize: "18px", fontWeight: "bold" as const, cursor: "pointer" };
-const safeNote = { textAlign: "center" as const, color: "#64748b", fontSize: "14px" };
-const muted = { color: "#64748b", margin: 0 };
+function PublicChrome() {
+  return (
+    <header style={publicHeader}>
+      <div style={headerInner}>
+        <Link href="/" className="lexora-checkout-link" style={brandLink}>
+          Lexora
+        </Link>
+        <nav style={headerNav} aria-label="Checkout navigation">
+          <Link href="/pricing" className="lexora-checkout-link" style={navLink}>
+            Pricing
+          </Link>
+          <Link href="/support" className="lexora-checkout-link" style={navLink}>
+            Support
+          </Link>
+        </nav>
+      </div>
+    </header>
+  );
+}
+
+const checkoutFocusStyles = `
+  .lexora-checkout-link:hover {
+    color: #5b21b6;
+  }
+  .lexora-checkout-link:focus-visible,
+  button:focus-visible {
+    outline: 2px solid #8b5cf6;
+    outline-offset: 2px;
+  }
+  @media (min-width: 768px) {
+    .lexora-checkout-card {
+      padding: 40px !important;
+    }
+  }
+`;
+
+const page = {
+  minHeight: "100vh",
+  backgroundImage:
+    "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(139, 92, 246, 0.08), transparent 55%), linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)",
+  backgroundColor: "#f8fafc",
+  fontFamily: "var(--font-geist-sans), system-ui, sans-serif",
+  color: "#0f172a",
+  display: "flex",
+  flexDirection: "column" as const,
+};
+
+const publicHeader = {
+  borderBottom: "1px solid #e8eaf0",
+  background: "rgba(248, 250, 252, 0.92)",
+  backdropFilter: "blur(8px)",
+  position: "sticky" as const,
+  top: 0,
+  zIndex: 20,
+};
+
+const headerInner = {
+  width: "100%",
+  maxWidth: "900px",
+  margin: "0 auto",
+  padding: "14px 16px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+  boxSizing: "border-box" as const,
+};
+
+const brandLink = {
+  color: "#0f172a",
+  textDecoration: "none",
+  fontWeight: 800 as const,
+  fontSize: "20px",
+  letterSpacing: "-0.03em",
+};
+
+const headerNav = {
+  display: "flex",
+  gap: "8px 14px",
+  flexWrap: "wrap" as const,
+};
+
+const navLink = {
+  color: "#64748b",
+  textDecoration: "none",
+  fontSize: "14px",
+  fontWeight: 500 as const,
+  minHeight: "40px",
+  display: "inline-flex",
+  alignItems: "center",
+};
+
+const shell = {
+  width: "100%",
+  maxWidth: "720px",
+  margin: "0 auto",
+  padding: "20px 16px 40px",
+  boxSizing: "border-box" as const,
+  flex: 1,
+};
+
+const loadingCard = {
+  ...shell,
+  color: "#64748b",
+  fontSize: "15px",
+};
+
+const backLink = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "8px",
+  color: "#6d28d9",
+  textDecoration: "none",
+  fontWeight: 600 as const,
+  fontSize: "14px",
+  marginBottom: "16px",
+  minHeight: "40px",
+};
+
+const card = {
+  width: "100%",
+  background: "#ffffff",
+  borderRadius: "16px",
+  padding: "24px 18px",
+  boxShadow: "0 12px 36px rgba(15, 23, 42, 0.06)",
+  border: "1px solid #e2e8f0",
+  boxSizing: "border-box" as const,
+};
+
+const brandRow = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+  marginBottom: "20px",
+  flexWrap: "wrap" as const,
+};
+
+const secureBadge = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+  background: "#faf5ff",
+  color: "#6d28d9",
+  padding: "6px 12px",
+  borderRadius: "999px",
+  fontSize: "13px",
+  fontWeight: 600 as const,
+  border: "1px solid #e9d5ff",
+};
+
+const title = {
+  margin: "0 0 10px",
+  fontSize: "28px",
+  fontWeight: 700 as const,
+  letterSpacing: "-0.03em",
+  color: "#0f172a",
+  lineHeight: 1.2,
+};
+
+const bodyText = {
+  margin: "0 0 22px",
+  color: "#475569",
+  fontSize: "16px",
+  lineHeight: 1.6,
+};
+
+const hintText = {
+  margin: "0 0 20px",
+  color: "#64748b",
+  fontSize: "14px",
+  lineHeight: 1.5,
+};
+
+const planBox = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "16px",
+  background: "#faf5ff",
+  border: "1px solid #e9d5ff",
+  borderRadius: "14px",
+  padding: "18px",
+  marginBottom: "18px",
+  flexWrap: "wrap" as const,
+};
+
+const planPriceBlock = {
+  textAlign: "right" as const,
+  minWidth: "140px",
+};
+
+const mutedLabel = {
+  margin: 0,
+  color: "#64748b",
+  fontSize: "13px",
+};
+
+const planName = {
+  margin: "4px 0",
+  fontSize: "20px",
+  fontWeight: 700 as const,
+  color: "#0f172a",
+};
+
+const mutedText = {
+  margin: 0,
+  color: "#64748b",
+  fontSize: "14px",
+};
+
+const summaryBox = {
+  border: "1px solid #e8eaf0",
+  borderRadius: "14px",
+  padding: "8px 16px",
+  marginBottom: "22px",
+  background: "#fafbfc",
+};
+
+const summaryRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "12px",
+  padding: "12px 0",
+  borderBottom: "1px solid #f1f5f9",
+  color: "#475569",
+  fontSize: "15px",
+  flexWrap: "wrap" as const,
+};
+
+const primaryButton = {
+  width: "100%",
+  minHeight: "52px",
+  borderRadius: "12px",
+  border: "none",
+  background: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
+  color: "#ffffff",
+  fontSize: "16px",
+  fontWeight: 700 as const,
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "8px",
+  textDecoration: "none",
+  boxSizing: "border-box" as const,
+  fontFamily: "inherit",
+};
+
+const secondaryButton = {
+  ...primaryButton,
+  background: "#ffffff",
+  color: "#6d28d9",
+  border: "1px solid #ddd6fe",
+  marginTop: "12px",
+};
+
+const safeNote = {
+  margin: "14px 0 0",
+  textAlign: "center" as const,
+  color: "#64748b",
+  fontSize: "14px",
+  lineHeight: 1.5,
+};
+
+const noticeBox = {
+  border: "1px solid #fde68a",
+  background: "#fffbeb",
+  borderRadius: "14px",
+  padding: "16px",
+};
+
+const noticeTitle = {
+  margin: "0 0 6px",
+  fontSize: "15px",
+  fontWeight: 700 as const,
+  color: "#92400e",
+};
+
+const noticeText = {
+  margin: 0,
+  color: "#78350f",
+  fontSize: "14px",
+  lineHeight: 1.5,
+};
