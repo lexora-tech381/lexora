@@ -1,906 +1,1005 @@
 "use client";
 
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
-
+import Sidebar from "@/components/Sidebar";
+import Header from "@/components/Header";
 import {
-  LayoutDashboard,
-  PenSquare,
-  FileText,
-  BarChart3,
-  CreditCard,
-  Settings,
-  LifeBuoy,
-  Crown,
   Activity,
+  AlertCircle,
   Clock,
-  Zap,
+  FileText,
   TrendingUp,
+  Zap,
 } from "lucide-react";
+
+interface UsageRecord {
+  date: string;
+  count: number;
+}
+
+interface DayUsage {
+  dateKey: string;
+  label: string;
+  count: number;
+}
+
+interface StatCardProps {
+  icon: ReactNode;
+  title: string;
+  value: string | number;
+  note: string;
+  tone?: "purple" | "green" | "orange" | "blue";
+}
+
+const planName = "Free";
+const dailyLimit = 10;
+
+function countWords(text: string | null | undefined): number {
+  if (!text || !text.trim()) return 0;
+  return text.trim().split(/\s+/).length;
+}
+
+function getUserInitial(user: User): string {
+  const fullName = user.user_metadata?.full_name;
+  if (typeof fullName === "string" && fullName.trim()) {
+    return fullName.trim().charAt(0).toUpperCase();
+  }
+  if (user.email) {
+    return user.email.charAt(0).toUpperCase();
+  }
+  return "U";
+}
+
+function toDateKey(date: Date): string {
+  return date.toISOString().split("T")[0];
+}
+
+function getLastSevenDateKeys(): string[] {
+  const keys: string[] = [];
+  for (let i = 6; i >= 0; i -= 1) {
+    const day = new Date();
+    day.setUTCDate(day.getUTCDate() - i);
+    keys.push(toDateKey(day));
+  }
+  return keys;
+}
+
+function formatChartLabel(dateKey: string): string {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const localDate = new Date(year, month - 1, day);
+  return localDate.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat("en-US").format(value);
+}
+
+function StatCard({ icon, title, value, note, tone = "purple" }: StatCardProps) {
+  const colors = {
+    purple: { color: "#6d28d9", background: "#f3e8ff" },
+    green: { color: "#15803d", background: "#dcfce7" },
+    orange: { color: "#b45309", background: "#ffedd5" },
+    blue: { color: "#1d4ed8", background: "#dbeafe" },
+  }[tone];
+
+  return (
+    <article style={statCard}>
+      <div
+        style={{
+          ...statIcon,
+          color: colors.color,
+          background: colors.background,
+        }}
+      >
+        {icon}
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <p style={statLabel}>{title}</p>
+        <h2 style={statValue}>{value}</h2>
+        <p style={{ ...statNote, color: colors.color }}>{note}</p>
+      </div>
+    </article>
+  );
+}
+
+function UsageChart({
+  days,
+  showDaySummary,
+}: {
+  days: DayUsage[];
+  showDaySummary: boolean;
+}) {
+  const total = days.reduce((sum, day) => sum + day.count, 0);
+  const maxValue = Math.max(...days.map((day) => day.count), 1);
+  const width = 720;
+  const height = 260;
+  const paddingX = 48;
+  const paddingY = 28;
+  const chartWidth = width - paddingX * 2;
+  const chartHeight = height - paddingY * 2 - 24;
+
+  const points = days.map((day, index) => {
+    const x =
+      paddingX +
+      (days.length === 1
+        ? chartWidth / 2
+        : (index / (days.length - 1)) * chartWidth);
+    const y = paddingY + chartHeight - (day.count / maxValue) * chartHeight;
+    return { x, y, ...day };
+  });
+
+  const polyline = points.map((point) => `${point.x},${point.y}`).join(" ");
+  const yTicks = [1, 0.75, 0.5, 0.25, 0].map((ratio) =>
+    Math.round(maxValue * ratio),
+  );
+
+  return (
+    <article style={panelCard}>
+      <div style={cardHeader}>
+        <div>
+          <h2 style={cardTitle}>Humanizations this week</h2>
+          <p style={cardMeta}>
+            {formatNumber(total)} total ·{" "}
+            {formatChartLabel(days[0]?.dateKey || "")} –{" "}
+            {formatChartLabel(days[days.length - 1]?.dateKey || "")}
+          </p>
+        </div>
+        <span style={rangeBadge}>Last 7 days</span>
+      </div>
+
+      {total === 0 ? (
+        <div style={emptyChart}>
+          <p style={emptyTitle}>No activity yet</p>
+          <p style={emptyText}>
+            Your daily humanizations for the last week will appear here.
+          </p>
+        </div>
+      ) : (
+        <div style={chartBox}>
+          <svg
+            width="100%"
+            height="100%"
+            viewBox={`0 0 ${width} ${height}`}
+            role="img"
+            aria-label="Humanizations over the last seven days"
+          >
+            {yTicks.map((tick, index) => {
+              const y = paddingY + (index / (yTicks.length - 1)) * chartHeight;
+              return (
+                <g key={`${tick}-${index}`}>
+                  <line
+                    x1={paddingX}
+                    y1={y}
+                    x2={width - paddingX}
+                    y2={y}
+                    stroke="#e8eaf0"
+                    strokeWidth="1"
+                  />
+                  <text x={12} y={y + 4} fontSize="12" fill="#94a3b8">
+                    {tick}
+                  </text>
+                </g>
+              );
+            })}
+
+            <polyline
+              points={polyline}
+              fill="none"
+              stroke="#7c3aed"
+              strokeWidth="3.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+
+            {points.map((point) => (
+              <g key={point.dateKey}>
+                <circle
+                  cx={point.x}
+                  cy={point.y}
+                  r="5"
+                  fill="#ffffff"
+                  stroke="#7c3aed"
+                  strokeWidth="3"
+                />
+                <text
+                  x={point.x}
+                  y={height - 8}
+                  textAnchor="middle"
+                  fontSize="12"
+                  fill="#64748b"
+                >
+                  {point.label}
+                </text>
+                <title>
+                  {point.label}: {point.count} humanization
+                  {point.count === 1 ? "" : "s"}
+                </title>
+              </g>
+            ))}
+          </svg>
+        </div>
+      )}
+
+      {total > 0 && showDaySummary ? (
+        <div style={daySummary} aria-label="Daily totals">
+          {days.map((day) => (
+            <div key={day.dateKey} style={daySummaryItem}>
+              <span style={daySummaryLabel}>{day.label}</span>
+              <strong style={daySummaryValue}>{day.count}</strong>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </article>
+  );
+}
 
 export default function UsagePage() {
   const router = useRouter();
-
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [todayUsage, setTodayUsage] = useState(0);
   const [documentsCount, setDocumentsCount] = useState(0);
   const [wordsProcessed, setWordsProcessed] = useState(0);
-
+  const [weekUsage, setWeekUsage] = useState<DayUsage[]>([]);
   const [isMobile, setIsMobile] = useState(false);
+  const [isTablet, setIsTablet] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
     const checkScreen = () => {
-      setIsMobile(window.innerWidth < 768);
+      const width = window.innerWidth;
+      setIsMobile(width < 768);
+      setIsTablet(width >= 768 && width < 1100);
     };
-
     checkScreen();
     window.addEventListener("resize", checkScreen);
-
     return () => window.removeEventListener("resize", checkScreen);
   }, []);
 
   useEffect(() => {
-    const loadUsageData = async () => {
+    let isMounted = true;
+
+    async function loadUsage() {
+      setErrorMessage(null);
+
       const {
-        data: { session },
+        data: { session: currentSession },
+        error: sessionError,
       } = await supabase.auth.getSession();
 
-      if (!session) {
-        router.push("/login");
+      if (sessionError) {
+        console.error("Usage session error:", sessionError);
+        if (isMounted) {
+          setErrorMessage(
+            "We could not load your usage information. Please refresh and try again.",
+          );
+          setLoading(false);
+        }
         return;
       }
 
-      setUser(session.user);
+      if (!currentSession) {
+        router.replace("/login");
+        return;
+      }
 
-      const today = new Date().toISOString().split("T")[0];
+      if (!isMounted) return;
+      setSession(currentSession);
 
-      const { data: usage } = await supabase
-        .from("usage")
-        .select("count")
-        .eq("user_id", session.user.id)
-        .eq("date", today)
-        .maybeSingle();
+      const userId = currentSession.user.id;
+      const today = toDateKey(new Date());
+      const lastSevenKeys = getLastSevenDateKeys();
+      const rangeStart = lastSevenKeys[0];
+      let hasPartialError = false;
 
-      setTodayUsage(usage?.count || 0);
+      const [todayResult, docsResult, weekResult] = await Promise.all([
+        supabase
+          .from("usage")
+          .select("count")
+          .eq("user_id", userId)
+          .eq("date", today)
+          .maybeSingle(),
+        supabase
+          .from("documents")
+          .select("humanized_text")
+          .eq("user_id", userId),
+        supabase
+          .from("usage")
+          .select("date, count")
+          .eq("user_id", userId)
+          .gte("date", rangeStart)
+          .lte("date", today),
+      ]);
 
-      const { data: documents } = await supabase
-        .from("documents")
-        .select("humanized_text")
-        .eq("user_id", session.user.id);
+      if (todayResult.error) {
+        console.error("Usage today error:", todayResult.error);
+        hasPartialError = true;
+      } else if (isMounted) {
+        setTodayUsage(todayResult.data?.count || 0);
+      }
 
-      setDocumentsCount(documents?.length || 0);
+      if (docsResult.error) {
+        console.error("Usage documents error:", docsResult.error);
+        hasPartialError = true;
+      } else if (isMounted) {
+        const docs = docsResult.data || [];
+        setDocumentsCount(docs.length);
+        setWordsProcessed(
+          docs.reduce(
+            (sum, doc: { humanized_text: string | null }) =>
+              sum + countWords(doc.humanized_text),
+            0,
+          ),
+        );
+      }
 
-      const totalWords =
-        documents?.reduce((total, doc) => {
-          const words =
-            doc.humanized_text?.trim().split(/\s+/).length || 0;
-          return total + words;
-        }, 0) || 0;
+      if (weekResult.error) {
+        console.error("Usage week error:", weekResult.error);
+        hasPartialError = true;
+        if (isMounted) {
+          setWeekUsage(
+            lastSevenKeys.map((dateKey) => ({
+              dateKey,
+              label: formatChartLabel(dateKey),
+              count: 0,
+            })),
+          );
+        }
+      } else if (isMounted) {
+        const usageMap = new Map<string, number>();
+        ((weekResult.data as UsageRecord[]) || []).forEach((row) => {
+          usageMap.set(row.date, row.count || 0);
+        });
 
-      setWordsProcessed(totalWords);
+        setWeekUsage(
+          lastSevenKeys.map((dateKey) => ({
+            dateKey,
+            label: formatChartLabel(dateKey),
+            count: usageMap.get(dateKey) || 0,
+          })),
+        );
+      }
+
+      if (hasPartialError && isMounted) {
+        setErrorMessage(
+          "We could not load all usage information. Please refresh and try again.",
+        );
+      }
+
+      if (isMounted) setLoading(false);
+    }
+
+    loadUsage();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!nextSession) {
+        router.replace("/login");
+        return;
+      }
+      setSession(nextSession);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
     };
-
-    loadUsageData();
   }, [router]);
 
-  return (
-    <main style={{ ...page, flexDirection: isMobile ? "column" : "row" }}>
+  const weekTotal = useMemo(
+    () => weekUsage.reduce((sum, day) => sum + day.count, 0),
+    [weekUsage],
+  );
 
-      {/* ================= Desktop Sidebar ================= */}
+  const remainingUses = Math.max(dailyLimit - todayUsage, 0);
+  const usagePercent = Math.min(
+    Math.round((todayUsage / dailyLimit) * 100),
+    100,
+  );
 
-      <aside
+  const statsColumns = useMemo(() => {
+    if (isMobile) return "1fr";
+    if (isTablet) return "1fr 1fr";
+    return "repeat(4, 1fr)";
+  }, [isMobile, isTablet]);
+
+  const navigate = (path: string) => {
+    router.push(path);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
+  };
+
+  if (loading || !session) {
+    return (
+      <main
         style={{
-          ...sidebar,
-          display: isMobile ? "none" : "flex",
+          ...pageShell,
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: "var(--font-geist-sans), system-ui, sans-serif",
         }}
       >
-        <h2 style={logo}>Lexora</h2>
-
-        <nav style={nav}>
-          <button
-            onClick={() => router.push("/dashboard")}
-            style={navItem}
-          >
-            <LayoutDashboard size={18} />
-            Dashboard
-          </button>
-
-          <button
-            onClick={() => router.push("/")}
-            style={navItem}
-          >
-            <PenSquare size={18} />
-            Humanizer
-          </button>
-
-          <button
-            onClick={() => router.push("/documents")}
-            style={navItem}
-          >
-            <FileText size={18} />
-            Documents
-          </button>
-
-          <button style={activeNav}>
-            <BarChart3 size={18} />
-            Usage
-          </button>
-
-          <button
-            onClick={() => router.push("/pricing")}
-            style={navItem}
-          >
-            <CreditCard size={18} />
-            Pricing
-          </button>
-
-          <button
-            onClick={() => router.push("/settings")}
-            style={navItem}
-          >
-            <Settings size={18} />
-            Settings
-          </button>
-
-          <button
-            onClick={() => router.push("/support")}
-            style={navItem}
-          >
-            <LifeBuoy size={18} />
-            Support
-          </button>
-        </nav>
-
-        <div style={upgradeBox}>
-          <Crown size={22} color="#7c3aed" />
-
-          <h3>Upgrade to Pro</h3>
-
-          <p style={mutedSmall}>
-            Unlock unlimited usage and premium
-            humanization modes.
-          </p>
-
-          <button
-            onClick={() => router.push("/pricing")}
-            style={upgradeButton}
-          >
-            Upgrade Now →
-          </button>
+        <div style={loadingCard} role="status" aria-live="polite">
+          Loading usage…
         </div>
-      </aside>
+      </main>
+    );
+  }
 
-      {/* ================= Main Content ================= */}
+  return (
+    <main
+      style={{
+        ...pageShell,
+        flexDirection: isMobile ? "column" : "row",
+        fontFamily: "var(--font-geist-sans), system-ui, sans-serif",
+      }}
+    >
+      <style>{`
+        .lexora-usage-btn:hover {
+          filter: brightness(1.04);
+        }
+        .lexora-usage-link:hover {
+          color: #5b21b6;
+        }
+        .lexora-usage-btn:focus-visible,
+        .lexora-usage-link:focus-visible {
+          outline: 2px solid #8b5cf6;
+          outline-offset: 2px;
+        }
+      `}</style>
 
-      <section
-        style={{
-          flex: 1,
-          width: "100%",
-          maxWidth: isMobile ? "100%" : "1250px",
-          margin: isMobile ? "0" : "0 auto",
-          padding: isMobile
-            ? "88px 16px 24px"
-            : "50px 36px",
-          boxSizing: "border-box",
-          overflowX: "hidden",
-        }}
-      >
+      <Sidebar
+        isMobile={isMobile}
+        onNavigate={navigate}
+        activePath="/usage"
+        onLogout={handleLogout}
+      />
 
-        {/* ================= Mobile Header ================= */}
+      <section style={contentShell}>
+        <Header
+          isMobile={isMobile}
+          menuOpen={menuOpen}
+          onToggleMenu={() => setMenuOpen(!menuOpen)}
+          onCloseMenu={() => setMenuOpen(false)}
+          onNavigate={navigate}
+          session={session}
+          uses={todayUsage}
+          getUserInitial={getUserInitial}
+          planName={planName}
+          dailyLimit={dailyLimit}
+          onLogout={handleLogout}
+        />
 
-        {isMobile && (
-          <header style={mobileHeader}>
-            <button
-              onClick={() =>
-                setMenuOpen(!menuOpen)
-              }
-              style={menuButton}
-            >
-              ☰
-            </button>
-
-            <div style={brandWrap}>
-              <div style={brandIcon}>
-                <div style={brandMark} />
-              </div>
-
-              <h2 style={headerLogo}>
-                Lexora
-              </h2>
-            </div>
-
-            <div style={headerActions}>
-              {user ? (
-                <div style={avatar}>
-                  {(
-                    user.user_metadata
-                      ?.full_name?.[0] ||
-                    user.email?.[0] ||
-                    "U"
-                  ).toUpperCase()}
-                </div>
-              ) : (
-                <>
-                  <button
-                    onClick={() =>
-                      router.push("/login")
-                    }
-                    style={headerSmallButton}
-                  >
-                    Login
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      router.push("/signup")
-                    }
-                    style={headerPurpleButton}
-                  >
-                    Sign Up
-                  </button>
-                </>
-              )}
-            </div>
-          </header>
-        )}
-
-{isMobile && menuOpen && (
-  <div style={mobileMenu}>
-    <button onClick={() => { setMenuOpen(false); router.push("/dashboard"); }} style={mobileMenuItem}>Dashboard</button>
-    <button onClick={() => { setMenuOpen(false); router.push("/"); }} style={mobileMenuItem}>Humanizer</button>
-    <button onClick={() => { setMenuOpen(false); router.push("/documents"); }} style={mobileMenuItem}>Documents</button>
-    <button onClick={() => { setMenuOpen(false); router.push("/usage"); }} style={mobileMenuItem}>Usage</button>
-    <button onClick={() => { setMenuOpen(false); router.push("/pricing"); }} style={mobileMenuItem}>Pricing</button>
-    <button onClick={() => { setMenuOpen(false); router.push("/settings"); }} style={mobileMenuItem}>Settings</button>
-    <button onClick={() => { setMenuOpen(false); router.push("/support"); }} style={mobileMenuItem}>Support</button>
-  </div>
-)}
-                <header
+        <div
           style={{
-            ...topbar,
-            flexDirection: isMobile ? "column" : "row",
-            alignItems: isMobile ? "flex-start" : "center",
-            gap: isMobile ? "14px" : "0",
+            ...contentPad,
+            padding: isMobile ? "80px 16px 32px" : "88px 28px 40px",
           }}
         >
-          <div>
-            <h1
-              style={{
-                ...title,
-                fontSize: isMobile ? "34px" : "38px",
-              }}
-            >
-              Usage Analytics
-            </h1>
+          <header
+            style={{
+              ...hero,
+              flexDirection: isMobile ? "column" : "row",
+              alignItems: isMobile ? "flex-start" : "center",
+            }}
+          >
+            <div>
+              <h1 style={{ ...title, fontSize: isMobile ? "30px" : "36px" }}>
+                Usage
+              </h1>
+              <p style={subtitle}>
+                Track your real humanization activity, daily limit, and saved
+                document totals.
+              </p>
+            </div>
 
-            <p style={subtitle}>
-              Track your humanization activity,
-              limits and plan usage.
-            </p>
-          </div>
-
-          {!isMobile && (
-            <button
-              onClick={() => router.push("/pricing")}
+            <Link
+              href="/pricing"
+              className="lexora-usage-btn"
               style={upgradeTopButton}
             >
-              Upgrade Plan
-            </button>
-          )}
-        </header>
+              View plans
+            </Link>
+          </header>
 
-        <section
-          style={{
-            ...statsGrid,
-            gridTemplateColumns: isMobile
-              ? "1fr"
-              : "repeat(4,1fr)",
-          }}
-        >
-          <Stat
-            icon={<Activity />}
-            label="Daily Uses"
-            value={`${todayUsage} / 10`}
-            note={`${Math.round(
-              (todayUsage / 10) * 100
-            )}% used today`}
-          />
-
-          <Stat
-            icon={<TrendingUp />}
-            label="Saved Documents"
-            value={documentsCount}
-            note="Total documents"
-            green
-          />
-
-          <Stat
-            icon={<Zap />}
-            label="Monthly Uses"
-            value="156"
-            note="+34 this month"
-            orange
-          />
-
-          <Stat
-            icon={<FileText />}
-            label="Words Processed"
-            value={wordsProcessed}
-            note="All time"
-            blue
-          />
-        </section>
-
-        <section
-          style={{
-            ...mainGrid,
-            gridTemplateColumns: isMobile
-              ? "1fr"
-              : "1.5fr 1fr",
-          }}
-        >
-          <div style={chartCard}>
-            <div style={cardHeader}>
-              <h2 style={{ margin: 0 }}>
-                Humanizations This Week
-              </h2>
-
-              <button style={filterButton}>
-                7 Days ⌄
-              </button>
+          {errorMessage ? (
+            <div style={errorBox} role="alert">
+              <AlertCircle size={16} aria-hidden />
+              <span>{errorMessage}</span>
             </div>
+          ) : null}
 
-            <div
-              style={{
-                ...barChart,
-                height: isMobile
-                  ? "220px"
-                  : "300px",
-                padding: isMobile
-                  ? "16px 10px"
-                  : "24px",
-              }}
-            >
-              {[
-                ["Mon", 30],
-                ["Tue", 50],
-                ["Wed", 70],
-                ["Thu", 40],
-                ["Fri", 80],
-                ["Sat", 60],
-                ["Sun", 90],
-              ].map(([day, value]) => (
-                <div
-                  key={day}
-                  style={barItem}
-                >
-                  <div
-                    style={{
-                      ...bar,
-                      height: `${value}%`,
-                      width: isMobile
-                        ? "22px"
-                        : "34px",
-                    }}
-                  />
+          <section
+            style={{
+              display: "grid",
+              gridTemplateColumns: statsColumns,
+              gap: isMobile ? "12px" : "16px",
+              marginBottom: "20px",
+            }}
+            aria-label="Usage summary"
+          >
+            <StatCard
+              icon={<Activity size={20} aria-hidden />}
+              title="Today"
+              value={`${todayUsage} / ${dailyLimit}`}
+              note={`${usagePercent}% of daily limit`}
+              tone="purple"
+            />
+            <StatCard
+              icon={<TrendingUp size={20} aria-hidden />}
+              title="This week"
+              value={formatNumber(weekTotal)}
+              note="Humanizations in the last 7 days"
+              tone="orange"
+            />
+            <StatCard
+              icon={<FileText size={20} aria-hidden />}
+              title="Saved documents"
+              value={formatNumber(documentsCount)}
+              note="Documents in your workspace"
+              tone="green"
+            />
+            <StatCard
+              icon={<Zap size={20} aria-hidden />}
+              title="Words in saved docs"
+              value={formatNumber(wordsProcessed)}
+              note="Based on saved rewritten text"
+              tone="blue"
+            />
+          </section>
 
-                  <span style={mutedSmall}>
-                    {day}
-                  </span>
+          <section
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "1.55fr 1fr",
+              gap: "16px",
+              marginBottom: "16px",
+              alignItems: "start",
+            }}
+          >
+            <UsageChart days={weekUsage} showDaySummary={!isMobile} />
+
+            <article style={panelCard}>
+              <div style={cardHeader}>
+                <div>
+                  <h2 style={cardTitle}>Current plan</h2>
+                  <p style={cardMeta}>
+                    Plan status will update once billing verification is
+                    connected.
+                  </p>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div style={planCard}>
-            <h2>Current Plan</h2>
-
-            <span style={planBadge}>
-              Free Plan
-            </span>
-
-            <div style={planList}>
-              <p>✓ 10 humanizations per day</p>
-              <p>✓ Free mode access</p>
-              <p>✓ Standard speed</p>
-              <p>✓ Save documents</p>
-            </div>
-
-            <button
-              onClick={() =>
-                router.push("/pricing")
-              }
-              style={upgradeButton}
-            >
-              Upgrade to Pro →
-            </button>
-          </div>
-        </section>
-
-        <section
-          style={{
-            ...bottomGrid,
-            gridTemplateColumns: isMobile
-              ? "1fr"
-              : "1fr 1fr",
-          }}
-        >
-          <div style={progressCard}>
-            <div style={cardHeader}>
-              <h2 style={{ margin: 0 }}>
-                Daily Limit
-              </h2>
-
-              <Clock
-                size={22}
-                color="#7c3aed"
-              />
-            </div>
-
-            <div style={progressTrack}>
-              <div
-                style={{
-                  ...progressFill,
-                  width: `${Math.min(
-                    (todayUsage / 10) * 100,
-                    100
-                  )}%`,
-                }}
-              />
-            </div>
-
-            <h3>
-              {todayUsage} of 10 uses today
-            </h3>
-
-            <p style={mutedSmall}>
-              Your limit resets every midnight.
-            </p>
-          </div>
-
-          <div style={breakdownCard}>
-            <h2>Usage Breakdown</h2>
-
-            {[
-              [
-                "Natural Mode",
-                "42%",
-              ],
-              [
-                "Academic Mode",
-                "28%",
-              ],
-              [
-                "Professional Mode",
-                "20%",
-              ],
-              [
-                "Creative Mode",
-                "10%",
-              ],
-            ].map(([name, value]) => (
-              <div
-                key={name}
-                style={breakdownRow}
-              >
-                <span>{name}</span>
-
-                <b>{value}</b>
+                <span style={planBadge}>Free</span>
               </div>
-            ))}
-          </div>
-        </section>
+
+              <ul style={planList}>
+                <li>{dailyLimit} humanizations per day</li>
+                <li>Save documents to your workspace</li>
+                <li>Standard processing</li>
+                <li>Usage tracking for your account</li>
+              </ul>
+
+              <Link
+                href="/pricing"
+                className="lexora-usage-btn"
+                style={primaryButton}
+              >
+                Explore paid plans
+              </Link>
+            </article>
+          </section>
+
+          <section
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+              gap: "16px",
+            }}
+          >
+            <article style={panelCard}>
+              <div style={cardHeader}>
+                <div>
+                  <h2 style={cardTitle}>Daily limit</h2>
+                  <p style={cardMeta}>
+                    Resets each day based on your account usage records.
+                  </p>
+                </div>
+                <Clock size={20} color="#7c3aed" aria-hidden />
+              </div>
+
+              <div
+                style={progressTrack}
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={dailyLimit}
+                aria-valuenow={todayUsage}
+                aria-label="Daily humanization usage"
+              >
+                <div
+                  style={{
+                    ...progressFill,
+                    width: `${usagePercent}%`,
+                  }}
+                />
+              </div>
+
+              <p style={progressPrimary}>
+                {todayUsage} of {dailyLimit} uses today
+              </p>
+              <p style={progressNote}>
+                {remainingUses === 0
+                  ? "You have reached today’s Free plan limit."
+                  : `${remainingUses} remaining today.`}
+              </p>
+            </article>
+
+            <article style={panelCard}>
+              <div style={cardHeader}>
+                <div>
+                  <h2 style={cardTitle}>What this page shows</h2>
+                  <p style={cardMeta}>
+                    Only information stored for your account is displayed.
+                  </p>
+                </div>
+              </div>
+
+              <ul style={infoList}>
+                <li>
+                  Daily and weekly humanization counts from your usage records
+                </li>
+                <li>Saved document totals from your workspace</li>
+                <li>
+                  Word counts calculated from saved rewritten text only
+                </li>
+                <li>
+                  Mode-by-mode breakdowns are not shown because mode usage is
+                  not stored separately yet
+                </li>
+              </ul>
+
+              <p style={footerHint}>
+                Need a higher limit?{" "}
+                <Link
+                  href="/pricing"
+                  className="lexora-usage-link"
+                  style={inlineLink}
+                >
+                  Compare plans
+                </Link>
+                .
+              </p>
+            </article>
+          </section>
+        </div>
       </section>
     </main>
   );
 }
 
-function Stat({
-  icon,
-  label,
-  value,
-  note,
-  green,
-  orange,
-  blue,
-}: any) {
-  return (
-    <div style={statCard}>
-      <div
-        style={{
-          ...statIcon,
-          color: green
-            ? "#16a34a"
-            : orange
-            ? "#f59e0b"
-            : blue
-            ? "#2563eb"
-            : "#7c3aed",
-
-          background: green
-            ? "#dcfce7"
-            : orange
-            ? "#fef3c7"
-            : blue
-            ? "#dbeafe"
-            : "#f3e8ff",
-        }}
-      >
-        {icon}
-      </div>
-
-      <div>
-        <p style={mutedSmall}>
-          {label}
-        </p>
-
-        <h2
-          style={{
-            margin: "6px 0",
-          }}
-        >
-          {value}
-        </h2>
-
-        <p
-          style={{
-            margin: 0,
-            fontWeight: "bold",
-            color: green
-              ? "#16a34a"
-              : orange
-              ? "#f59e0b"
-              : "#7c3aed",
-          }}
-        >
-          {note}
-        </p>
-      </div>
-    </div>
-  );
-}
-const page = {
+const pageShell = {
   minHeight: "100vh",
   display: "flex",
-  background: "#f8fafc",
+  backgroundImage:
+    "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(139, 92, 246, 0.08), transparent 55%), linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)",
+  backgroundColor: "#f8fafc",
   color: "#0f172a",
-  fontFamily: "Arial, sans-serif",
 };
 
-const sidebar = {
-  width: "250px",
-  minWidth: "250px",
-  background: "#fff",
-  borderRight: "1px solid #e5e7eb",
-  padding: "28px 20px",
-  height: "100vh",
-  position: "sticky" as const,
-  top: 0,
-  display: "flex",
-  flexDirection: "column" as const,
-};
-
-const logo = { fontSize: "26px", fontWeight: 800, marginBottom: "35px" };
-const nav = { display: "grid", gap: "10px" };
-
-const activeNav = {
-  display: "flex",
-  alignItems: "center",
-  gap: "12px",
-  padding: "14px 16px",
-  borderRadius: "12px",
-  border: "none",
-  background: "#f3e8ff",
-  color: "#7c3aed",
-  fontWeight: "bold" as const,
-  cursor: "pointer",
-  fontSize: "15px",
-};
-
-const navItem = { ...activeNav, background: "transparent", color: "#334155" };
-
-const upgradeBox = {
-  marginTop: "auto",
-  background: "#faf5ff",
-  border: "1px solid #eadcff",
+const loadingCard = {
+  width: "100%",
+  maxWidth: "420px",
+  margin: "40px 16px",
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
   borderRadius: "16px",
-  padding: "20px",
+  padding: "28px 24px",
+  textAlign: "center" as const,
+  color: "#64748b",
+  fontSize: "14px",
+  boxShadow: "0 12px 36px rgba(15, 23, 42, 0.06)",
 };
 
-const upgradeButton = {
-  padding: "12px 22px",
-  borderRadius: "10px",
-  border: "none",
-  background: "linear-gradient(135deg,#8b5cf6,#7c3aed)",
-  color: "white",
-  fontWeight: "bold" as const,
-  cursor: "pointer",
+const contentShell = {
+  flex: 1,
+  minWidth: 0,
   width: "100%",
 };
 
-const mobileHeader = {
-  display: "flex",
-  position: "fixed" as const,
-  top: 0,
-  left: 0,
-  right: 0,
-  zIndex: 9999,
-  background: "#f8fafc",
-  padding: "12px 14px",
-  alignItems: "center",
-  gap: "8px",
-  boxShadow: "0 4px 12px rgba(15,23,42,0.06)",
+const contentPad = {
+  width: "100%",
+  maxWidth: "1120px",
+  margin: "0 auto",
+  boxSizing: "border-box" as const,
 };
 
-const menuButton = {
-  width: "38px",
-  height: "38px",
-  borderRadius: "12px",
-  border: "1px solid #e5e7eb",
-  background: "#ffffff",
-  fontSize: "20px",
-  cursor: "pointer",
-  flexShrink: 0,
-};
-
-const brandWrap = {
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-  minWidth: 0,
-};
-
-const brandIcon = {
-  width: "38px",
-  height: "38px",
-  background: "linear-gradient(135deg,#5b21b6,#c084fc)",
-  clipPath: "polygon(25% 6%,75% 6%,100% 50%,75% 94%,25% 94%,0% 50%)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  flexShrink: 0,
-};
-
-const brandMark = {
-  width: "15px",
-  height: "21px",
-  borderLeft: "6px solid white",
-  borderBottom: "6px solid white",
-  borderBottomLeftRadius: "7px",
-};
-
-const headerLogo = {
-  margin: 0,
-  fontSize: "22px",
-  fontWeight: 800,
-  color: "#0f172a",
-};
-
-const headerActions = {
-  marginLeft: "auto",
-  display: "flex",
-  gap: "6px",
-};
-
-const headerSmallButton = {
-  padding: "8px 10px",
-  borderRadius: "10px",
-  border: "1px solid #e5e7eb",
-  background: "#ffffff",
-  color: "#111827",
-  fontWeight: "bold" as const,
-  fontSize: "12px",
-  cursor: "pointer",
-};
-
-const headerPurpleButton = {
-  ...headerSmallButton,
-  background: "linear-gradient(135deg,#8b5cf6,#7c3aed)",
-  color: "white",
-  border: "none",
-};
-
-const mobileMenu = {
-  position: "fixed" as const,
-  top: "68px",
-  left: "14px",
-  right: "14px",
-  zIndex: 99999,
-  background: "#ffffff",
-  border: "1px solid #e5e7eb",
-  borderRadius: "18px",
-  padding: "14px",
-  display: "grid",
-  gap: "10px",
-  boxShadow: "0 18px 40px rgba(15,23,42,0.18)",
-};
-
-const mobileMenuItem = {
-  padding: "12px",
-  borderRadius: "12px",
-  border: "none",
-  background: "#f8fafc",
-  color: "#0f172a",
-  fontWeight: "bold" as const,
-  textAlign: "left" as const,
-  cursor: "pointer",
-};
-
-const avatar = {
-  width: "38px",
-  height: "38px",
-  borderRadius: "50%",
-  background: "#7c3aed",
-  color: "white",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontWeight: "bold" as const,
-  flexShrink: 0,
-};
-
-const topbar = {
+const hero = {
   display: "flex",
   justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: "28px",
+  gap: "16px",
+  marginBottom: "22px",
 };
 
-const title = { fontSize: "38px", margin: 0 };
+const title = {
+  margin: "0 0 8px",
+  color: "#0f172a",
+  fontWeight: 700 as const,
+  letterSpacing: "-0.03em",
+  lineHeight: 1.15,
+};
 
 const subtitle = {
+  margin: 0,
   color: "#64748b",
-  marginTop: "8px",
-  lineHeight: "1.5",
+  fontSize: "16px",
+  lineHeight: 1.6,
+  maxWidth: "560px",
 };
 
 const upgradeTopButton = {
-  padding: "12px 20px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: "44px",
+  padding: "10px 16px",
   borderRadius: "12px",
-  border: "none",
-  background: "linear-gradient(135deg,#8b5cf6,#7c3aed)",
-  color: "white",
-  fontWeight: "bold" as const,
-  cursor: "pointer",
+  border: "1px solid #ddd6fe",
+  background: "#ffffff",
+  color: "#7c3aed",
+  fontWeight: 700 as const,
+  fontSize: "14px",
+  textDecoration: "none",
+  whiteSpace: "nowrap" as const,
+  fontFamily: "inherit",
 };
 
-const statsGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(4, 1fr)",
-  gap: "20px",
-  marginBottom: "24px",
+const errorBox = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "8px",
+  marginBottom: "16px",
+  padding: "12px 14px",
+  borderRadius: "10px",
+  background: "#fef2f2",
+  border: "1px solid #fecaca",
+  color: "#b91c1c",
+  fontSize: "14px",
+  lineHeight: 1.5,
 };
 
 const statCard = {
-  background: "#fff",
-  border: "1px solid #e5e7eb",
-  borderRadius: "18px",
-  padding: "24px",
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
+  borderRadius: "16px",
+  padding: "18px",
   display: "flex",
-  gap: "18px",
-  alignItems: "center",
-  boxShadow: "0 10px 25px rgba(15,23,42,0.05)",
+  gap: "14px",
+  alignItems: "flex-start",
+  boxShadow: "0 8px 24px rgba(15, 23, 42, 0.04)",
+  boxSizing: "border-box" as const,
 };
 
 const statIcon = {
-  width: "54px",
-  height: "54px",
-  borderRadius: "14px",
+  width: "42px",
+  height: "42px",
+  borderRadius: "12px",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   flexShrink: 0,
 };
 
-const mainGrid = {
-  display: "grid",
-  gridTemplateColumns: "1.5fr 1fr",
-  gap: "24px",
-  marginBottom: "24px",
+const statLabel = {
+  margin: 0,
+  color: "#64748b",
+  fontSize: "13px",
+  fontWeight: 600 as const,
 };
 
-const chartCard = {
-  background: "#fff",
-  border: "1px solid #e5e7eb",
-  borderRadius: "20px",
-  padding: "24px",
-  boxShadow: "0 12px 30px rgba(15,23,42,0.05)",
-  overflow: "hidden",
+const statValue = {
+  margin: "4px 0",
+  fontSize: "28px",
+  fontWeight: 700 as const,
+  color: "#0f172a",
+  letterSpacing: "-0.03em",
+  lineHeight: 1.1,
 };
 
-const planCard = { ...chartCard };
+const statNote = {
+  margin: 0,
+  fontSize: "13px",
+  fontWeight: 600 as const,
+  lineHeight: 1.4,
+};
+
+const panelCard = {
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
+  borderRadius: "18px",
+  padding: "20px 18px",
+  boxShadow: "0 10px 28px rgba(15, 23, 42, 0.05)",
+  boxSizing: "border-box" as const,
+};
 
 const cardHeader = {
   display: "flex",
   justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: "18px",
-  gap: "10px",
+  alignItems: "flex-start",
+  gap: "12px",
+  marginBottom: "16px",
 };
 
-const filterButton = {
-  padding: "10px 14px",
-  borderRadius: "10px",
-  border: "1px solid #e5e7eb",
-  background: "#fff",
+const cardTitle = {
+  margin: 0,
+  fontSize: "18px",
+  fontWeight: 700 as const,
+  color: "#0f172a",
+};
+
+const cardMeta = {
+  margin: "6px 0 0",
+  color: "#64748b",
+  fontSize: "13px",
+  lineHeight: 1.5,
+};
+
+const rangeBadge = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "6px 10px",
+  borderRadius: "999px",
+  background: "#faf5ff",
+  border: "1px solid #e9d5ff",
+  color: "#6d28d9",
+  fontSize: "12px",
+  fontWeight: 700 as const,
   whiteSpace: "nowrap" as const,
 };
 
-const barChart = {
-  height: "300px",
-  display: "flex",
-  alignItems: "end",
-  justifyContent: "space-around",
-  background: "linear-gradient(180deg,#fff,#faf5ff)",
-  borderRadius: "16px",
-  padding: "24px",
+const planBadge = {
+  ...rangeBadge,
+  background: "#f8fafc",
+  border: "1px solid #e2e8f0",
+  color: "#475569",
+};
+
+const emptyChart = {
+  border: "1px dashed #e2e8f0",
+  borderRadius: "14px",
+  padding: "36px 18px",
+  textAlign: "center" as const,
+  background: "#fafbfc",
+};
+
+const emptyTitle = {
+  margin: "0 0 6px",
+  fontSize: "16px",
+  fontWeight: 700 as const,
+  color: "#0f172a",
+};
+
+const emptyText = {
+  margin: 0,
+  color: "#64748b",
+  fontSize: "14px",
+  lineHeight: 1.5,
+};
+
+const chartBox = {
+  width: "100%",
+  height: "260px",
   overflow: "hidden",
 };
 
-const barItem = {
-  height: "100%",
-  display: "flex",
-  flexDirection: "column" as const,
-  alignItems: "center",
-  justifyContent: "end",
-  gap: "10px",
+const daySummary = {
+  display: "grid",
+  gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+  gap: "8px",
+  marginTop: "14px",
 };
 
-const bar = {
-  width: "34px",
-  borderRadius: "999px 999px 8px 8px",
-  background: "linear-gradient(180deg,#a855f7,#7c3aed)",
+const daySummaryItem = {
+  background: "#f8fafc",
+  border: "1px solid #eef2f7",
+  borderRadius: "10px",
+  padding: "8px 6px",
+  textAlign: "center" as const,
 };
 
-const planBadge = {
-  display: "inline-block",
-  background: "#f3e8ff",
-  color: "#7c3aed",
-  padding: "9px 14px",
-  borderRadius: "999px",
-  fontWeight: "bold" as const,
-  marginBottom: "18px",
+const daySummaryLabel = {
+  display: "block",
+  color: "#94a3b8",
+  fontSize: "11px",
+  marginBottom: "4px",
+};
+
+const daySummaryValue = {
+  color: "#0f172a",
+  fontSize: "14px",
 };
 
 const planList = {
-  color: "#334155",
-  lineHeight: "1.9",
-  marginBottom: "24px",
+  margin: "0 0 18px",
+  paddingLeft: "18px",
+  color: "#475569",
+  fontSize: "14px",
+  lineHeight: 1.8,
 };
 
-const bottomGrid = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: "24px",
+const primaryButton = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: "100%",
+  minHeight: "48px",
+  borderRadius: "12px",
+  border: "none",
+  background: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
+  color: "#ffffff",
+  fontWeight: 700 as const,
+  fontSize: "14px",
+  textDecoration: "none",
+  fontFamily: "inherit",
+  boxSizing: "border-box" as const,
 };
-
-const progressCard = { ...chartCard };
-const breakdownCard = { ...chartCard };
 
 const progressTrack = {
-  height: "14px",
-  background: "#e5e7eb",
+  width: "100%",
+  height: "12px",
   borderRadius: "999px",
-  margin: "22px 0",
+  background: "#f1f5f9",
+  overflow: "hidden",
+  marginBottom: "14px",
 };
 
 const progressFill = {
-  height: "14px",
-  background: "linear-gradient(135deg,#8b5cf6,#7c3aed)",
+  height: "100%",
   borderRadius: "999px",
+  background: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
+  transition: "width 0.2s ease",
 };
 
-const breakdownRow = {
-  display: "flex",
-  justifyContent: "space-between",
-  padding: "16px 0",
-  borderBottom: "1px solid #e5e7eb",
+const progressPrimary = {
+  margin: "0 0 6px",
+  fontSize: "18px",
+  fontWeight: 700 as const,
+  color: "#0f172a",
 };
 
-const mutedSmall = {
+const progressNote = {
+  margin: 0,
   color: "#64748b",
   fontSize: "14px",
-  margin: "4px 0",
+  lineHeight: 1.5,
+};
+
+const infoList = {
+  margin: "0 0 16px",
+  paddingLeft: "18px",
+  color: "#475569",
+  fontSize: "14px",
+  lineHeight: 1.75,
+};
+
+const footerHint = {
+  margin: 0,
+  color: "#64748b",
+  fontSize: "14px",
+};
+
+const inlineLink = {
+  color: "#7c3aed",
+  textDecoration: "none",
+  fontWeight: 600 as const,
 };
