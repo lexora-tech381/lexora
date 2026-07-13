@@ -21,7 +21,7 @@ export async function POST(req: Request) {
       apiKey: process.env.TOGETHER_API_KEY || "",
     });
 
-    const { text } = await req.json();
+    const { text, mode = "Free", tone = "Natural" } = await req.json();
 
     if (!text || !text.trim()) {
       return Response.json(
@@ -42,6 +42,8 @@ CRITICAL LAWS:
    - Instead of 'students/employees/people', use 'folks' or 'human beings'.
    - Instead of 'school/work/job', use 'educational institution work' or 'a working position'.
    - Instead of 'stress/anxiety', use 'internal pressure' or 'heavy weight'.
+4. MODE: Apply a "${mode}" rewriting style.
+5. TONE: Write in a "${tone}" tone.
 
 Output ONLY the beautifully written rewritten text. No meta explanations.`;
 
