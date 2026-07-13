@@ -40,9 +40,22 @@ const dailyLimit = 10;
 // Replace `null` with the verified plan id from billing/webhook data.
 const currentPlanId: PricingPlan["id"] | null = null;
 
-function getEnvUrl(value: string | undefined): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
+const POLAR_CHECKOUT = {
+  silverMonthly:
+    "https://buy.polar.sh/polar_cl_A7Nr0bKmhPcczc9dMY1ZTgA8z13e6ggrmuLxk1cj5Ab",
+  goldMonthly:
+    "https://buy.polar.sh/polar_cl_GbQaVEWBGt7jhATZjNFVdiarBKQlf6jvL613J3XSKAW",
+  premiumMonthly:
+    "https://buy.polar.sh/polar_cl_aqCr5DXtBm8ZlsWlWucMFte1AxjeIBu00EI0d2pgTWV",
+} as const;
+
+function getCheckoutUrl(
+  envValue: string | undefined,
+  fallback?: string,
+): string | undefined {
+  const fromEnv = envValue?.trim();
+  if (fromEnv) return fromEnv;
+  return fallback;
 }
 
 function getUserInitial(user: User): string {
@@ -106,10 +119,11 @@ function buildPlans(): PricingPlan[] {
       description: "For light monthly writing needs.",
       monthlyPrice: 2.99,
       yearlyPrice: 29,
-      monthlyCheckoutUrl: getEnvUrl(
+      monthlyCheckoutUrl: getCheckoutUrl(
         process.env.NEXT_PUBLIC_POLAR_SILVER_MONTHLY_URL,
+        POLAR_CHECKOUT.silverMonthly,
       ),
-      yearlyCheckoutUrl: getEnvUrl(
+      yearlyCheckoutUrl: getCheckoutUrl(
         process.env.NEXT_PUBLIC_POLAR_SILVER_YEARLY_URL,
       ),
       allowance: "10,000 words per month",
@@ -130,10 +144,11 @@ function buildPlans(): PricingPlan[] {
       monthlyPrice: 9.99,
       yearlyPrice: 99,
       popular: true,
-      monthlyCheckoutUrl: getEnvUrl(
+      monthlyCheckoutUrl: getCheckoutUrl(
         process.env.NEXT_PUBLIC_POLAR_GOLD_MONTHLY_URL,
+        POLAR_CHECKOUT.goldMonthly,
       ),
-      yearlyCheckoutUrl: getEnvUrl(
+      yearlyCheckoutUrl: getCheckoutUrl(
         process.env.NEXT_PUBLIC_POLAR_GOLD_YEARLY_URL,
       ),
       allowance: "30,000 words per month",
@@ -153,10 +168,11 @@ function buildPlans(): PricingPlan[] {
       description: "For heavier professional writing workloads.",
       monthlyPrice: 19.99,
       yearlyPrice: 189,
-      monthlyCheckoutUrl: getEnvUrl(
+      monthlyCheckoutUrl: getCheckoutUrl(
         process.env.NEXT_PUBLIC_POLAR_PREMIUM_MONTHLY_URL,
+        POLAR_CHECKOUT.premiumMonthly,
       ),
-      yearlyCheckoutUrl: getEnvUrl(
+      yearlyCheckoutUrl: getCheckoutUrl(
         process.env.NEXT_PUBLIC_POLAR_PREMIUM_YEARLY_URL,
       ),
       allowance: "60,000 words per month",
@@ -317,21 +333,20 @@ export default function PricingPage() {
     if (selectedPlanId === plan.id) return "Opening checkout...";
 
     if (plan.id === "free") {
-      if (currentPlanId === "free") return "Current Plan";
-      return session ? "Use Free Plan" : "Start Free";
+      return "Use Free Plan";
     }
 
     if (currentPlanId === plan.id) return "Current Plan";
 
     if (isYearly && !plan.yearlyCheckoutUrl) {
-      return "Yearly coming soon";
+      return "Yearly Coming Soon";
     }
 
-    if (!isYearly && !plan.monthlyCheckoutUrl) {
-      return "Unavailable";
+    if (isYearly && plan.yearlyCheckoutUrl) {
+      return `Get ${plan.name}`;
     }
 
-    return `Choose ${plan.name} ${isYearly ? "yearly" : "monthly"}`;
+    return `Get ${plan.name}`;
   }
 
   const cardsColumns = isMobile
@@ -485,9 +500,7 @@ export default function PricingPage() {
               const priceSuffix = isYearly ? "per year" : "per month";
               const isCurrent = currentPlanId === plan.id;
               const checkoutUnavailable =
-                plan.id !== "free" &&
-                ((isYearly && !plan.yearlyCheckoutUrl) ||
-                  (!isYearly && !plan.monthlyCheckoutUrl));
+                plan.id !== "free" && isYearly && !plan.yearlyCheckoutUrl;
               const disabled =
                 authLoading ||
                 selectedPlanId === plan.id ||
