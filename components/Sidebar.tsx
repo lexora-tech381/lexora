@@ -63,7 +63,7 @@ export default function Sidebar({
         }
       `}</style>
 
-      <div>
+      <div style={navSection}>
         <div style={{ marginBottom: "28px", paddingLeft: "4px" }}>
           <BrandLogo />
         </div>
@@ -112,7 +112,7 @@ export default function Sidebar({
           type="button"
           className="lexora-upgrade-btn"
           onClick={() => onNavigate("/pricing")}
-          style={purpleButtonSmall}
+          style={upgradeButton}
         >
           Upgrade
         </button>
@@ -134,6 +134,12 @@ const sidebar = {
   position: "sticky" as const,
   top: 0,
   boxSizing: "border-box" as const,
+};
+
+const navSection = {
+  flex: 1,
+  minHeight: 0,
+  overflowY: "auto" as const,
 };
 
 const nav = {
@@ -173,6 +179,9 @@ const logoutItem = {
 
 const upgradeBox = {
   marginTop: "auto",
+  flexShrink: 0,
+  position: "relative" as const,
+  zIndex: 1,
   background: "linear-gradient(160deg, #faf5ff 0%, #f5f3ff 100%)",
   border: "1px solid #e9d5ff",
   borderRadius: "14px",
@@ -203,7 +212,7 @@ const mutedSmall = {
   margin: "0 0 14px",
 };
 
-const purpleButtonSmall = {
+const upgradeButton = {
   padding: "10px 14px",
   borderRadius: "10px",
   border: "none",
@@ -214,4 +223,5 @@ const purpleButtonSmall = {
   width: "100%",
   fontSize: "14px",
   transition: "filter 0.15s ease, transform 0.15s ease",
+  pointerEvents: "auto" as const,
 };
