@@ -9,6 +9,7 @@ type HumanizerToolProps = {
   loading: boolean;
   copied: boolean;
   errorMessage: string | null;
+  successMessage?: string | null;
   remaining: number;
   wordCount: number;
   charCount: number;
@@ -35,6 +36,7 @@ export default function HumanizerTool({
   loading,
   copied,
   errorMessage,
+  successMessage,
   remaining,
   wordCount,
   charCount,
@@ -51,7 +53,7 @@ export default function HumanizerTool({
   const editorHeight = isMobile ? 260 : 330;
 
   return (
-    <section style={{ ...toolCard, padding: isMobile ? "16px" : "22px" }}>
+    <section style={{ ...toolCard, padding: isMobile ? "18px" : "24px" }}>
       <style>{`
         .lexora-seg-btn:hover:not(.lexora-seg-active) {
           color: #0f172a;
@@ -178,7 +180,7 @@ export default function HumanizerTool({
         style={{
           ...panels,
           gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-          gap: isMobile ? "14px" : "16px",
+          gap: isMobile ? "14px" : "18px",
         }}
       >
         <div style={panel}>
@@ -279,17 +281,27 @@ export default function HumanizerTool({
         </button>
       </div>
 
-      {copied && <p style={copiedText}>Copied to clipboard</p>}
-      {errorMessage ? <p style={errorText} role="alert">{errorMessage}</p> : null}
+      {(copied || successMessage) && (
+        <p style={feedbackSuccess} role="status">
+          {copied ? "Copied to clipboard" : successMessage}
+        </p>
+      )}
+      {errorMessage ? (
+        <p style={feedbackError} role="alert">
+          {errorMessage}
+        </p>
+      ) : null}
     </section>
   );
 }
 
 const toolCard = {
   background: "#ffffff",
-  border: "1px solid #e8eaf0",
-  borderRadius: "18px",
-  boxShadow: "0 10px 40px rgba(15, 23, 42, 0.05)",
+  border: "1px solid #e2e8f0",
+  borderRadius: "16px",
+  boxShadow: "0 12px 36px rgba(15, 23, 42, 0.07)",
+  width: "100%",
+  boxSizing: "border-box" as const,
 };
 
 const controlsRow = {
@@ -301,9 +313,9 @@ const controlsRow = {
 const label = {
   color: "#64748b",
   fontSize: "11px",
-  fontWeight: 700 as const,
+  fontWeight: 600 as const,
   margin: "0 0 8px",
-  letterSpacing: "0.06em",
+  letterSpacing: "0.05em",
   textTransform: "uppercase" as const,
 };
 
@@ -341,7 +353,7 @@ const segmentActive = {
 
 const statusRow = {
   display: "flex",
-  margin: "14px 0 16px",
+  margin: "14px 0 18px",
 };
 
 const statusMuted = {
@@ -380,15 +392,16 @@ const panelHeader = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  marginBottom: "10px",
+  marginBottom: "12px",
   gap: "8px",
 };
 
 const panelTitle = {
   margin: 0,
   fontSize: "15px",
-  fontWeight: 700 as const,
+  fontWeight: 600 as const,
   color: "#0f172a",
+  letterSpacing: "-0.01em",
 };
 
 const miniButton = {
@@ -405,11 +418,11 @@ const miniButton = {
 
 const textarea = {
   width: "100%",
-  border: "1.5px solid #ddd6fe",
+  border: "1px solid #ddd6fe",
   borderRadius: "12px",
   padding: "14px",
   fontSize: "15px",
-  lineHeight: 1.55,
+  lineHeight: 1.6,
   color: "#0f172a",
   background: "#ffffff",
   resize: "none" as const,
@@ -421,11 +434,11 @@ const textarea = {
 
 const resultBox = {
   overflowY: "auto" as const,
-  border: "1.5px solid #ddd6fe",
+  border: "1px solid #ddd6fe",
   borderRadius: "12px",
   padding: "14px",
   fontSize: "15px",
-  lineHeight: 1.55,
+  lineHeight: 1.6,
   background: "#ffffff",
   whiteSpace: "pre-wrap" as const,
   boxSizing: "border-box" as const,
@@ -434,14 +447,15 @@ const resultBox = {
 const counter = {
   color: "#94a3b8",
   fontSize: "12px",
-  margin: "8px 0 0",
+  margin: "10px 0 0",
+  lineHeight: 1.4,
 };
 
 const mainActionRow = {
   display: "flex",
   justifyContent: "center",
-  marginTop: "18px",
-  paddingTop: "18px",
+  marginTop: "20px",
+  paddingTop: "20px",
   borderTop: "1px solid #f1f5f9",
 };
 
@@ -451,7 +465,7 @@ const humanizeButton = {
   border: "none",
   background: "linear-gradient(135deg,#8b5cf6,#7c3aed)",
   color: "white",
-  fontWeight: 700 as const,
+  fontWeight: 600 as const,
   cursor: "pointer",
   fontSize: "14px",
   transition: "filter 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
@@ -481,18 +495,28 @@ const saveButton = {
   transition: "background 0.15s ease, border-color 0.15s ease",
 };
 
-const copiedText = {
-  color: "#16a34a",
+const feedbackSuccess = {
+  marginTop: "14px",
+  padding: "10px 14px",
+  borderRadius: "10px",
+  background: "#f0fdf4",
+  border: "1px solid #bbf7d0",
+  color: "#15803d",
   textAlign: "center" as const,
-  marginTop: "12px",
-  fontSize: "13px",
-  fontWeight: 600 as const,
-};
-
-const errorText = {
-  color: "#dc2626",
-  textAlign: "center" as const,
-  marginTop: "12px",
   fontSize: "13px",
   fontWeight: 500 as const,
+  lineHeight: 1.4,
+};
+
+const feedbackError = {
+  marginTop: "14px",
+  padding: "10px 14px",
+  borderRadius: "10px",
+  background: "#fef2f2",
+  border: "1px solid #fecaca",
+  color: "#b91c1c",
+  textAlign: "center" as const,
+  fontSize: "13px",
+  fontWeight: 500 as const,
+  lineHeight: 1.4,
 };

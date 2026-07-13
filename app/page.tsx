@@ -22,6 +22,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -97,7 +98,8 @@ export default function Home() {
     if (loading) return;
 
     if (!text.trim()) {
-      alert("Please paste text first.");
+      setSuccessMessage(null);
+      setErrorMessage("Please paste text first.");
       return;
     }
 
@@ -117,12 +119,14 @@ export default function Home() {
     }
 
     if (uses >= 10) {
-      setResult("You have reached your free limit of 10 humanizations today.");
+      setSuccessMessage(null);
+      setErrorMessage("You have reached your free limit of 10 humanizations today.");
       return;
     }
 
     setLoading(true);
     setErrorMessage(null);
+    setSuccessMessage(null);
 
     try {
       const response = await fetch("/api/humanize", {
@@ -186,22 +190,27 @@ export default function Home() {
     setResult("");
     setCopied(false);
     setErrorMessage(null);
+    setSuccessMessage(null);
   };
 
   const copyResult = () => {
     if (!result.trim()) {
-      alert("Nothing to copy yet.");
+      setSuccessMessage(null);
+      setErrorMessage("Nothing to copy yet.");
       return;
     }
 
     navigator.clipboard.writeText(result);
+    setErrorMessage(null);
+    setSuccessMessage(null);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const saveDocument = async () => {
     if (!result.trim()) {
-      alert("Please humanize text first before saving.");
+      setSuccessMessage(null);
+      setErrorMessage("Please humanize text first before saving.");
       return;
     }
 
@@ -221,6 +230,7 @@ export default function Home() {
     }
 
     setErrorMessage(null);
+    setSuccessMessage(null);
 
     const { error: insertError } = await supabase.from("documents").insert({
       user_id: activeSession.user.id,
@@ -233,7 +243,8 @@ export default function Home() {
       return;
     }
 
-    alert("Document saved!");
+    setSuccessMessage("Document saved.");
+    setTimeout(() => setSuccessMessage(null), 3000);
   };
 
   return (
@@ -242,6 +253,8 @@ export default function Home() {
         ...page,
         flexDirection: isMobile ? "column" : "row",
         fontFamily: "var(--font-geist-sans), system-ui, sans-serif",
+        backgroundImage:
+          "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(139, 92, 246, 0.08), transparent 55%), linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)",
       }}
     >
       <Sidebar isMobile={isMobile} onNavigate={navigate} />
@@ -249,7 +262,7 @@ export default function Home() {
       <section
         style={{
           ...content,
-          padding: isMobile ? "76px 16px 28px" : "76px 28px 36px",
+          padding: isMobile ? "80px 16px 32px" : "88px 28px 40px",
         }}
       >
         <Header
@@ -263,12 +276,21 @@ export default function Home() {
           getUserInitial={getUserInitial}
         />
 
-        <div style={{ ...heroSection, padding: isMobile ? "8px 0 16px" : "4px 0 18px" }}>
-          <h1 style={{ ...title, fontSize: isMobile ? "26px" : "32px" }}>
+        <div
+          style={{
+            ...heroSection,
+            padding: isMobile ? "20px 0 20px" : "28px 0 28px",
+          }}
+        >
+          <span style={heroBadge}>AI Writing Assistant</span>
+          <h1 style={{ ...title, fontSize: isMobile ? "28px" : "34px" }}>
             Humanize AI text
           </h1>
-          <p style={subtitle}>
+          <p style={{ ...subtitle, fontSize: isMobile ? "15px" : "16px" }}>
             Rewrite AI-generated content into clear, natural writing.
+          </p>
+          <p style={supportLine}>
+            Preserve your meaning while improving clarity, tone, and flow.
           </p>
         </div>
 
@@ -281,6 +303,7 @@ export default function Home() {
           loading={loading}
           copied={copied}
           errorMessage={errorMessage}
+          successMessage={successMessage}
           remaining={remaining}
           wordCount={wordCount}
           charCount={charCount}
@@ -298,8 +321,8 @@ export default function Home() {
         <div
           style={{
             ...landingArea,
-            marginTop: isMobile ? "36px" : "48px",
-            padding: isMobile ? "36px 0 0" : "48px 0 0",
+            marginTop: isMobile ? "44px" : "64px",
+            padding: isMobile ? "36px 0 0" : "52px 0 0",
           }}
         >
           <HowItWorks isMobile={isMobile} />
@@ -328,19 +351,42 @@ const content = {
   boxSizing: "border-box" as const,
 };
 
+const heroBadge = {
+  display: "inline-block",
+  marginBottom: "14px",
+  padding: "5px 11px",
+  borderRadius: "999px",
+  border: "1px solid #e9d5ff",
+  background: "#f5f3ff",
+  color: "#6d28d9",
+  fontSize: "12px",
+  fontWeight: 600 as const,
+  letterSpacing: "0.02em",
+  lineHeight: 1.3,
+};
+
 const title = {
-  fontWeight: 750 as const,
+  fontWeight: 700 as const,
   margin: 0,
-  letterSpacing: "-0.03em",
+  letterSpacing: "-0.025em",
   color: "#0f172a",
-  lineHeight: 1.15,
+  lineHeight: 1.2,
 };
 
 const subtitle = {
   color: "#64748b",
+  margin: "12px 0 0",
+  fontSize: "16px",
+  lineHeight: 1.6,
+  maxWidth: "540px",
+};
+
+const supportLine = {
+  color: "#94a3b8",
   margin: "8px 0 0",
-  fontSize: "15px",
-  lineHeight: 1.45,
+  fontSize: "14px",
+  lineHeight: 1.55,
+  maxWidth: "540px",
 };
 
 const heroSection = {
@@ -349,4 +395,5 @@ const heroSection = {
 
 const landingArea = {
   borderTop: "1px solid #e8eaf0",
+  width: "100%",
 };

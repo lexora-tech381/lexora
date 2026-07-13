@@ -36,15 +36,17 @@ export default function PricingPreview({ onNavigate }: PricingPreviewProps) {
 
 const ctaBox = {
   marginTop: "56px",
+  width: "100%",
+  boxSizing: "border-box" as const,
   background: "linear-gradient(135deg, #5b21b6 0%, #7c3aed 55%, #a78bfa 100%)",
-  borderRadius: "18px",
+  borderRadius: "16px",
   padding: "28px 32px",
   display: "flex",
   flexWrap: "wrap" as const,
   alignItems: "center",
   justifyContent: "space-between",
   gap: "20px",
-  boxShadow: "0 16px 40px rgba(91, 33, 182, 0.22)",
+  boxShadow: "0 12px 32px rgba(91, 33, 182, 0.18)",
 };
 
 const ctaContent = {
@@ -63,16 +65,17 @@ const eyebrow = {
 
 const title = {
   margin: "0 0 8px",
-  fontSize: "24px",
-  fontWeight: 750 as const,
+  fontSize: "22px",
+  fontWeight: 700 as const,
   color: "#ffffff",
   letterSpacing: "-0.02em",
+  lineHeight: 1.25,
 };
 
 const subtitle = {
   margin: 0,
   fontSize: "15px",
-  lineHeight: 1.5,
+  lineHeight: 1.6,
   color: "rgba(255,255,255,0.85)",
   maxWidth: "480px",
 };
@@ -83,7 +86,7 @@ const ctaButton = {
   border: "none",
   background: "#ffffff",
   color: "#5b21b6",
-  fontWeight: 700 as const,
+  fontWeight: 600 as const,
   cursor: "pointer",
   fontSize: "14px",
   whiteSpace: "nowrap" as const,

@@ -103,11 +103,12 @@ const sectionBlock = {
 
 const sectionTitle = {
   textAlign: "center" as const,
-  fontSize: "28px",
-  fontWeight: 750 as const,
+  fontSize: "26px",
+  fontWeight: 700 as const,
   margin: "0 0 8px",
-  letterSpacing: "-0.03em",
+  letterSpacing: "-0.025em",
   color: "#0f172a",
+  lineHeight: 1.25,
 };
 
 const sectionSubtitle = {
@@ -115,6 +116,7 @@ const sectionSubtitle = {
   color: "#64748b",
   margin: "0 0 28px",
   fontSize: "15px",
+  lineHeight: 1.6,
 };
 
 const featureCard = {
@@ -141,13 +143,13 @@ const stepBadge = {
 const cardTitle = {
   margin: "0 0 6px",
   fontSize: "16px",
-  fontWeight: 700 as const,
+  fontWeight: 600 as const,
   color: "#0f172a",
 };
 
 const mutedSmall = {
   color: "#64748b",
-  lineHeight: 1.5,
+  lineHeight: 1.6,
   fontSize: "14px",
   margin: 0,
 };

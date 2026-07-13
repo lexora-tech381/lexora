@@ -107,9 +107,7 @@ export default function FAQ({ onNavigate }: FAQProps) {
 
 const faqSection = {
   marginTop: "56px",
-  maxWidth: "720px",
-  marginLeft: "auto",
-  marginRight: "auto",
+  width: "100%",
 };
 
 const headerBlock = {
@@ -119,16 +117,18 @@ const headerBlock = {
 
 const sectionTitle = {
   margin: "0 0 8px",
-  fontSize: "28px",
-  fontWeight: 750 as const,
-  letterSpacing: "-0.03em",
+  fontSize: "26px",
+  fontWeight: 700 as const,
+  letterSpacing: "-0.025em",
   color: "#0f172a",
+  lineHeight: 1.25,
 };
 
 const sectionSubtitle = {
   margin: 0,
   color: "#64748b",
   fontSize: "15px",
+  lineHeight: 1.6,
 };
 
 const faqList = {
