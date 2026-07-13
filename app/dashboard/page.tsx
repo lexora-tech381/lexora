@@ -618,6 +618,7 @@ export default function DashboardPage() {
           planName={planName}
           dailyLimit={dailyLimit}
           onLogout={handleLogout}
+          activePath="/dashboard"
         />
 
         {loading ? (

@@ -285,6 +285,7 @@ export default function Home() {
           uses={uses}
           getUserInitial={getUserInitial}
           onLogout={session ? handleLogout : undefined}
+          activePath="/"
         />
 
         <div

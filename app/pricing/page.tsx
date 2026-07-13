@@ -433,6 +433,7 @@ export default function PricingPage() {
           planName={planName}
           dailyLimit={dailyLimit}
           onLogout={session ? handleLogout : undefined}
+          activePath="/pricing"
         />
 
         <div

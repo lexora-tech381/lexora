@@ -391,6 +391,7 @@ export default function SettingsPage() {
           planName={planName}
           dailyLimit={dailyLimit}
           onLogout={handleLogout}
+          activePath="/settings"
         />
 
         <div

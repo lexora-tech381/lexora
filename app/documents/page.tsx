@@ -517,6 +517,7 @@ export default function DocumentsPage() {
           planName={planName}
           dailyLimit={dailyLimit}
           onLogout={handleLogout}
+          activePath="/documents"
         />
 
         {isLoading ? (

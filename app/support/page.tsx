@@ -394,6 +394,7 @@ export default function SupportPage() {
           planName={planName}
           dailyLimit={dailyLimit}
           onLogout={session ? handleLogout : undefined}
+          activePath="/support"
         />
 
         <div

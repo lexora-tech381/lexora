@@ -15,6 +15,7 @@ type HeaderProps = {
   planName?: string;
   dailyLimit?: number;
   onLogout?: () => void;
+  activePath?: string;
 };
 
 const MOBILE_LINKS = [
@@ -39,6 +40,7 @@ export default function Header({
   planName = "Free",
   dailyLimit = 10,
   onLogout,
+  activePath,
 }: HeaderProps) {
   return (
     <>
@@ -49,13 +51,14 @@ export default function Header({
         .lexora-header-cta:hover {
           filter: brightness(1.06);
         }
-        .lexora-mobile-item:hover {
+        .lexora-mobile-item:hover:not(.lexora-mobile-active) {
           background: #f3e8ff;
           color: #6d28d9;
         }
         .lexora-header-btn:focus-visible,
         .lexora-header-cta:focus-visible,
-        .lexora-mobile-item:focus-visible {
+        .lexora-mobile-item:focus-visible,
+        .lexora-header-menu:focus-visible {
           outline: 2px solid #8b5cf6;
           outline-offset: 2px;
         }
@@ -70,12 +73,14 @@ export default function Header({
       >
         <div style={topRow}>
           {isMobile ? (
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={mobileBrandRow}>
               <button
                 type="button"
+                className="lexora-header-menu"
                 onClick={onToggleMenu}
                 aria-label={menuOpen ? "Close menu" : "Open menu"}
                 aria-expanded={menuOpen}
+                aria-controls="lexora-mobile-nav"
                 style={menuButton}
               >
                 {menuOpen ? "✕" : "☰"}
@@ -91,14 +96,18 @@ export default function Header({
             </div>
           )}
 
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "8px" }}>
+          <div style={actionsRow}>
             {isMobile && (
-              <span style={usageBadgeCompact}>
+              <span style={usageBadgeCompact} aria-label="Daily usage">
                 {uses}/{dailyLimit}
               </span>
             )}
             {session ? (
-              <div style={avatar} title="Account" aria-label="Account">
+              <div
+                style={avatar}
+                title="Account"
+                aria-label={`Account: ${getUserInitial(session.user)}`}
+              >
                 {getUserInitial(session.user)}
               </div>
             ) : (
@@ -126,21 +135,30 @@ export default function Header({
       </header>
 
       {isMobile && menuOpen && (
-        <nav style={mobileMenu} aria-label="Mobile navigation">
-          {MOBILE_LINKS.map(({ label, path }) => (
-            <button
-              key={path}
-              type="button"
-              className="lexora-mobile-item"
-              onClick={() => {
-                onCloseMenu();
-                onNavigate(path);
-              }}
-              style={mobileMenuItem}
-            >
-              {label}
-            </button>
-          ))}
+        <nav
+          id="lexora-mobile-nav"
+          style={mobileMenu}
+          aria-label="Mobile navigation"
+        >
+          {MOBILE_LINKS.map(({ label, path }) => {
+            const isActive = activePath === path;
+            return (
+              <button
+                key={path}
+                type="button"
+                className={`lexora-mobile-item${isActive ? " lexora-mobile-active" : ""}`}
+                onClick={() => {
+                  onCloseMenu();
+                  if (!isActive) onNavigate(path);
+                }}
+                style={isActive ? mobileMenuItemActive : mobileMenuItem}
+                aria-current={isActive ? "page" : undefined}
+                aria-label={label}
+              >
+                {label}
+              </button>
+            );
+          })}
           {onLogout ? (
             <button
               type="button"
@@ -150,6 +168,7 @@ export default function Header({
                 onLogout();
               }}
               style={{ ...mobileMenuItem, color: "#b91c1c" }}
+              aria-label="Log out"
             >
               Logout
             </button>
@@ -169,6 +188,7 @@ const topbar = {
   backdropFilter: "blur(10px)",
   borderBottom: "1px solid #e8eaf0",
   pointerEvents: "auto" as const,
+  fontFamily: "var(--font-geist-sans), system-ui, sans-serif",
 };
 
 const topRow = {
@@ -177,6 +197,19 @@ const topRow = {
   gap: "12px",
   width: "100%",
   minHeight: "44px",
+};
+
+const mobileBrandRow = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+};
+
+const actionsRow = {
+  marginLeft: "auto",
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
 };
 
 const metaGroup = {
@@ -228,6 +261,8 @@ const smallButton = {
   cursor: "pointer",
   fontSize: "13px",
   transition: "background 0.15s ease",
+  fontFamily: "inherit",
+  minHeight: "40px",
 };
 
 const purpleSmall = {
@@ -240,6 +275,8 @@ const purpleSmall = {
   cursor: "pointer",
   fontSize: "13px",
   transition: "filter 0.15s ease",
+  fontFamily: "inherit",
+  minHeight: "40px",
 };
 
 const avatar = {
@@ -267,6 +304,7 @@ const menuButton = {
   alignItems: "center",
   justifyContent: "center",
   color: "#0f172a",
+  fontFamily: "inherit",
 };
 
 const mobileMenu = {
@@ -282,6 +320,7 @@ const mobileMenu = {
   display: "grid",
   gap: "4px",
   boxShadow: "0 20px 50px rgba(15,23,42,0.14)",
+  fontFamily: "var(--font-geist-sans), system-ui, sans-serif",
 };
 
 const mobileMenuItem = {
@@ -296,4 +335,12 @@ const mobileMenuItem = {
   fontSize: "15px",
   transition: "background 0.15s ease, color 0.15s ease",
   minHeight: "44px",
+  fontFamily: "inherit",
+};
+
+const mobileMenuItemActive = {
+  ...mobileMenuItem,
+  background: "#f3e8ff",
+  color: "#6d28d9",
+  cursor: "default",
 };

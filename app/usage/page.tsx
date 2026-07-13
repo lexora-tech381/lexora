@@ -481,6 +481,7 @@ export default function UsagePage() {
           planName={planName}
           dailyLimit={dailyLimit}
           onLogout={handleLogout}
+          activePath="/usage"
         />
 
         <div
