@@ -246,12 +246,20 @@ function cleanOutput(text: string): string {
 // Replace common AI detector trigger phrases with natural human alternatives
 function replaceAIDetectorTriggers(text: string): string {
   return text
-    // Remove robotic transition openings
-    .replace(/^so yeah,\s*/gi, "")
+    // Strip conversational filler & word inflators
+    .replace(/, you know/gi, "")
+    .replace(/and honestly,\s*/gi, "")
+    .replace(/it's crazy how\s*/gi, "")
+    .replace(/which happens to me all the time/gi, "")
+    .replace(/or whatever/gi, "")
+    .replace(/and all that/gi, "")
+    .replace(/so yeah,\s*/gi, "")
+    
+    // Clean up robotic transition openings
     .replace(/emotional control's another big one/gi, "it also helps with handling your emotions")
     .replace(/it even affects your physical wellbeing/gi, "your body feels the difference too")
     
-    // Clean up standard AI cliché combinations
+    // Standard AI cliché replacements
     .replace(/in today's fast-paced world/gi, "these days")
     .replace(/a profound impact/gi, "a real effect")
     .replace(/vying for our attention/gi, "competing for focus")
@@ -319,20 +327,21 @@ function buildSystemPrompt(
   inputParagraphCount: number,
   isRetry: boolean = false,
 ): string {
-  const minWords = Math.round(inputWordCount * 0.92);
-  const maxWords = Math.round(inputWordCount * 1.08);
+  const minWords = Math.round(inputWordCount * 0.95);
+  const maxWords = Math.round(inputWordCount * 1.02);
 
-  return `You are a casual human blog writer and essayist. Your task is to completely rewrite the text so that it reads like an authentic, unfiltered human writing off the cuff.
+  return `You are a professional human editor rewriting text to read completely naturally without adding fluff or expanding length.
 
-CRITICAL LENGTH: Target length is ~${inputWordCount} words (${minWords}-${maxWords} range).
+STRICT LENGTH CONSTRAINT:
+Original word count: ${inputWordCount} words.
+Your output MUST be between ${minWords} and ${maxWords} words. DO NOT inflate or bloat the word count with conversational filler.
 
-HUMAN PROSE ENFORCEMENT RULES:
-1. NO FORMAL STRUCTURE: Do NOT write topic sentences or formal concluding lines for paragraphs. Just jump straight into the thoughts.
-2. VARY LENGTH EXTREMELY: Alternate between long, rambling thoughts connected with em-dashes or commas, and short 3-to-4 word punchy statements.
-3. ABSOLUTE BAN ON AI ESSAY TRANSITIONS: Never use "another benefit is", "it's not just", "in the end", "profound impact", "respite", "vying for attention", or "in a world that's".
-4. WRITE LIKE A PERSON TALKING: Use active verbs, natural contractions (it's, don't, you're, wouldn't), and realistic cadence.
+HUMAN STYLE REQUIREMENTS:
+1. NO FILLER PHRASES: Do NOT use "you know", "honestly", "it's crazy how", "which happens to me all the time", or "or whatever". Write clean, direct prose.
+2. NATURAL CLAUSE VARIATION: Mix long descriptive sentences with short punchy thoughts. Merge adjacent ideas naturally instead of rewriting line-by-line.
+3. BAN LISTICLE TRANSITIONS: Avoid starting paragraphs with formal signposts like "another benefit is", "it's worth noting", or "in conclusion".
 
-Return ONLY the rewritten text without titles, intros, or quotes.`;
+Return ONLY the rewritten text without titles, quotes, or intros.`;
 }
 
 export async function POST(req: Request) {
