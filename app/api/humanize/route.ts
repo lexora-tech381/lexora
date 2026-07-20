@@ -246,18 +246,14 @@ function cleanOutput(text: string): string {
 // Replace common AI detector trigger phrases with natural human alternatives
 function replaceAIDetectorTriggers(text: string): string {
   return text
-    // Strip conversational filler & word inflators
-    .replace(/, you know/gi, "")
-    .replace(/and honestly,\s*/gi, "")
-    .replace(/it's crazy how\s*/gi, "")
-    .replace(/which happens to me all the time/gi, "")
-    .replace(/or whatever/gi, "")
-    .replace(/and all that/gi, "")
-    .replace(/so yeah,\s*/gi, "")
-    
-    // Clean up robotic transition openings
-    .replace(/emotional control's another big one/gi, "it also helps with handling your emotions")
-    .replace(/it even affects your physical wellbeing/gi, "your body feels the difference too")
+    // Clean up robotic transition openings and textbook phrasing
+    .replace(/emotional control is another area where/gi, "handling your emotions also gets easier when")
+    .replace(/in addition to its mental benefits,\s*/gi, "beyond just the mental side, ")
+    .replace(/as a tool for managing the challenges of everyday life,\s*/gi, "when it comes to daily stress, ")
+    .replace(/by incorporating meditation into daily life,\s*/gi, "sticking with a basic routine means ")
+    .replace(/a much-needed respite/gi, "a real break")
+    .replace(/transform lives in profound ways/gi, "make a genuine difference")
+    .replace(/is unparalleled/gi, "works surprisingly well")
     
     // Standard AI cliché replacements
     .replace(/in today's fast-paced world/gi, "these days")
@@ -327,21 +323,35 @@ function buildSystemPrompt(
   inputParagraphCount: number,
   isRetry: boolean = false,
 ): string {
-  const minWords = Math.round(inputWordCount * 0.95);
-  const maxWords = Math.round(inputWordCount * 1.02);
+  const minWords = Math.round(inputWordCount * 0.93);
+  const maxWords = Math.round(inputWordCount * 1.05);
 
-  return `You are a professional human editor rewriting text to read completely naturally without adding fluff or expanding length.
+  return `You are a human writer rephrasing text to sound completely natural, informal, and unscripted. 
 
-STRICT LENGTH CONSTRAINT:
-Original word count: ${inputWordCount} words.
-Your output MUST be between ${minWords} and ${maxWords} words. DO NOT inflate or bloat the word count with conversational filler.
+CRITICAL TARGET WORD COUNT:
+Target: ~${inputWordCount} words (strict range: ${minWords} to ${maxWords} words). Do not expand with fluff or cut content.
 
-HUMAN STYLE REQUIREMENTS:
-1. NO FILLER PHRASES: Do NOT use "you know", "honestly", "it's crazy how", "which happens to me all the time", or "or whatever". Write clean, direct prose.
-2. NATURAL CLAUSE VARIATION: Mix long descriptive sentences with short punchy thoughts. Merge adjacent ideas naturally instead of rewriting line-by-line.
-3. BAN LISTICLE TRANSITIONS: Avoid starting paragraphs with formal signposts like "another benefit is", "it's worth noting", or "in conclusion".
+CRITICAL STRUCTURAL TRANSFORMATION RULES (TO ELIMINATE AI DETECTORS):
+1. RADICAL SENTENCE LENGTH VARIATION (BURSTINESS):
+   - You MUST mix sentence lengths aggressively. 
+   - Follow a long, multi-clause explanatory sentence (25–35 words) directly with a short, punchy sentence (3–6 words).
+   - Example pattern: Long sentence with an em-dash or parenthetical thought. Short point. Medium sentence explaining the detail.
 
-Return ONLY the rewritten text without titles, quotes, or intros.`;
+2. BAN STANDARD ESSAY OPENINGS AND TOPIC SENTENCES:
+   - NEVER open paragraphs with phrases like: "Meditation is...", "Emotional control is...", "In addition to...", "Regular practice can...", "By incorporating...", or "As a tool for...".
+   - Start paragraphs directly in the middle of an action, observation, or real-world scenario.
+
+3. RESTRUCTURE CLAUSES AND SENTENCE SEQUENCES:
+   - DO NOT rephrase sentence-by-sentence in order. Combine concepts from adjacent sentences or flip the cause-and-effect order.
+   - Use natural human punctuation: em-dashes (—), semicolons, and occasional parenthetical pauses.
+
+4. BANNED AI WORDS & PHRASE PATTERNS:
+   - Absolutely forbidden words: "invaluable", "respite", "profound", "unparalleled", "transform lives", "numerous benefits", "crucial", "tapestry", "delve", "foster".
+
+MODE: ${modeName} - ${modeInstruction}
+TONE: ${toneName} - ${toneInstruction}
+
+Return ONLY the final rewritten text. No commentary, no title, no quote marks.`;
 }
 
 export async function POST(req: Request) {
