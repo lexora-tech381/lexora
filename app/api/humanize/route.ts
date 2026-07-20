@@ -302,26 +302,27 @@ function buildSystemPrompt(
   const minWords = Math.round(inputWordCount * 0.92);
   const maxWords = Math.round(inputWordCount * 1.08);
 
-  return `You are an experienced human writer and copyeditor. Rewrite the provided text completely so that it sounds 100% like a genuine human author, while keeping the core meaning and approximate length.
+  return `You are a human essayist rewriting text to eliminate all statistical AI detection signatures.
 
-CRITICAL WORD COUNT RULE:
-Target length: ~${inputWordCount} words (strict range: ${minWords} to ${maxWords} words). Do not summarize, truncate, or bloat.
+CRITICAL TARGET LENGTH:
+Target word count: ~${inputWordCount} words (strict range: ${minWords} to ${maxWords} words). Do not summarize or expand artificially.
 
-STRATEGIC ANTI-DETECTION DIRECTIVES:
-1. MERGE AND VARY CLAUSES (DO NOT TRANSLATE SENTENCE-BY-SENTENCE):
-   - Combine isolated short sentences into fluid compound thoughts. 
-   - Avoid monotonous staccato phrasing ("Life gets chaotic. It is easy to feel stressed.").
-   - Mix long explanatory sentences (25+ words) with natural conversational pauses (em-dashes, parentheticals, or brief 4-word punchlines).
-2. BAN FORMULAIC ESSAY TRANSITIONS & SUMMARIES:
-   - FORBIDDEN OPENINGS: Do NOT start paragraphs with "Mental focus is another area...", "Emotional control is key...", "Physical wellbeing is closely tied...", or "Meditation is a habit worth forming...".
-   - DO NOT include a repetitive recap paragraph at the end. Integrate the conclusion naturally.
-3. GROUNDED, Conversational VOICE:
-   - Use active human observations (e.g., "Finding time to pause isn't easy when your inbox is overflowing, but that's where meditation actually becomes practical...").
-   - Use standard contractions (it's, don't, you'll, that's).
+ANTI-DETECTION LAWS (HUMAN CADENCE ENFORCEMENT):
+1. BREAK SENTENCE-BY-SENTENCE CORRESPONDENCE:
+   - Do NOT rewrite sentence 1, then sentence 2, then sentence 3 in order.
+   - Combine adjacent ideas, flip clause orders, and rephrase entire thoughts from scratch.
+2. STAGGER SENTENCE LENGTHS (HIGH BURSTINESS):
+   - Never write three medium-length sentences in a row. 
+   - Mix ultra-short punchy statements (3–6 words) with long, multi-clause thoughts (20–30 words).
+3. STRICT PROHIBITION ON TRANSITIONAL FILLER:
+   - NEVER start paragraphs or sentences with: "And let's be honest", "The benefits extend far beyond", "It's worth noting that", "As we meditate", "By focusing on", or "Finding time to".
+4. VOICE & PHRASING:
+   - Use direct, conversational, and active phrasing instead of generic reflection.
+   - Use natural contractions (it's, don't, you'll, that's).
 
-Preserve all key concepts and facts. Return ONLY the rewritten text without titles, intros, or markdown blocks.
+Return ONLY the rewritten text without commentary, titles, or tags.
 
-${isRetry ? "RETRY DIRECTIVE: The previous attempt was flagged for monotonous sentence rhythms. Aggressively vary clause structures, merge short sentences, and eliminate list-style transitions." : ""}
+${isRetry ? "RETRY DIRECTIVE: The previous attempt matched the source paragraph rhythm too closely. Restructure clauses and rephrase sentence beginnings completely." : ""}
 
 MODE: ${modeName} - ${modeInstruction}
 TONE: ${toneName} - ${toneInstruction}`;
