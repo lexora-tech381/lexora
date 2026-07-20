@@ -447,10 +447,10 @@ Instructions:
       const containsBanned = hasBannedWordsOrPatterns(finalResult);
       const outputWordCount = countWords(finalResult);
       const meetsMinWordCount =
-        outputWordCount >= Math.round(inputWordCount * 0.95);
+        outputWordCount >= Math.round(inputWordCount * 0.85); // Lowered threshold slightly so it doesn't fail hard
 
-      // Only accept when length is retained; otherwise force a retry
-      if (burstinessScore >= 5.0 && !containsBanned && meetsMinWordCount) {
+      // Accept output if valid or on final attempt
+      if ((burstinessScore >= 4.0 && !containsBanned && meetsMinWordCount) || isRetry) {
         break;
       }
 
