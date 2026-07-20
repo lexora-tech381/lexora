@@ -23,6 +23,10 @@ const BANNED_AI_WORDS = [
   "seamless",
   "embark",
   "ultimately",
+  "invaluable",
+  "respite",
+  "profound",
+  "unparalleled",
 ];
 
 // Robotic transitions & cliche AI phrases to filter out
@@ -38,6 +42,8 @@ const BANNED_PATTERNS = [
   "much-needed respite",
   "in terms of its benefits",
   "cultivate a greater sense",
+  "muscle that gets stronger",
+  "so what does it all add up to",
 ];
 
 const MODE_INSTRUCTIONS: Record<string, string> = {
@@ -243,25 +249,22 @@ function cleanOutput(text: string): string {
   cleaned = removeDuplicateTailArtifacts(cleaned);
   return cleaned.trim();
 }
+
 // Replace common AI detector trigger phrases with natural human alternatives
 function replaceAIDetectorTriggers(text: string): string {
   return text
-    // Clean up robotic transition openings and textbook phrasing
-    .replace(/emotional control is another area where/gi, "handling your emotions also gets easier when")
-    .replace(/in addition to its mental benefits,\s*/gi, "beyond just the mental side, ")
-    .replace(/as a tool for managing the challenges of everyday life,\s*/gi, "when it comes to daily stress, ")
-    .replace(/by incorporating meditation into daily life,\s*/gi, "sticking with a basic routine means ")
-    .replace(/a much-needed respite/gi, "a real break")
-    .replace(/transform lives in profound ways/gi, "make a genuine difference")
-    .replace(/is unparalleled/gi, "works surprisingly well")
-    
-    // Standard AI cliché replacements
-    .replace(/in today's fast-paced world/gi, "these days")
-    .replace(/a profound impact/gi, "a real effect")
-    .replace(/vying for our attention/gi, "competing for focus")
-    .replace(/respite from the chaos/gi, "break from everything")
-    .replace(/it's not just (.+?) that benefits/gi, "beyond just $1")
-    .replace(/wreak havoc on/gi, "mess up");
+    // Clean up robotic transitions
+    .replace(/\bso what does it all add up to\?\s*/gi, "")
+    .replace(/\bsimple yet powerful\b/gi, "practical")
+    .replace(/\bmuscle that gets stronger with practice\b/gi, "skill you get better at over time")
+    .replace(/\bin today's fast-paced world\b/gi, "these days")
+    .replace(/\ba profound impact\b/gi, "a real effect")
+    .replace(/\bvying for our attention\b/gi, "competing for focus")
+    .replace(/\brespite from the chaos\b/gi, "break from everything")
+    .replace(/\bwreak havoc on\b/gi, "mess up")
+    .replace(/\ba much-needed respite\b/gi, "a real break")
+    .replace(/\btransform lives in profound ways\b/gi, "make a genuine difference")
+    .replace(/\bis unparalleled\b/gi, "works surprisingly well");
 }
 
 // Clean up synthetic formatting while preserving paragraph spacing
@@ -308,7 +311,7 @@ function PostProcessHumanize(text: string): string {
   // Trim duplicate closing summary paragraphs / repeated ending sentences
   cleaned = removeDuplicateTailArtifacts(cleaned);
 
-  // 1. Run the AI detector trigger replacer
+  // Run the AI detector trigger replacer
   cleaned = replaceAIDetectorTriggers(cleaned);
 
   return cleaned.trim();
@@ -450,14 +453,16 @@ Instructions:
         isRetry,
       );
 
-      const currentTemperature = isRetry ? 0.95 : 0.85;
+      // Controlled temperature prevents conversational hallucinations
+      const currentTemperature = isRetry ? 0.78 : 0.68;
 
       const response = await together.chat.completions.create({
         model: MODEL,
         temperature: currentTemperature,
+        top_p: 0.9,
         max_tokens: maxTokens,
-        presence_penalty: 0.35,  // Increased from 0.2 to penalize repetitive structures
-        frequency_penalty: 0.45, // Increased from 0.3 to force varied word choices
+        presence_penalty: 0.25,
+        frequency_penalty: 0.35,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userMessage },
@@ -473,7 +478,7 @@ Instructions:
       const containsBanned = hasBannedWordsOrPatterns(finalResult);
       const outputWordCount = countWords(finalResult);
       const meetsMinWordCount =
-        outputWordCount >= Math.round(inputWordCount * 0.85); // Lowered threshold slightly so it doesn't fail hard
+        outputWordCount >= Math.round(inputWordCount * 0.85);
 
       // Accept output if valid or on final attempt
       if ((burstinessScore >= 4.0 && !containsBanned && meetsMinWordCount) || isRetry) {
