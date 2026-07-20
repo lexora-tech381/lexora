@@ -1,0 +1,249 @@
+---
+description: Lexora AI Project Rules
+alwaysApply: true
+---
+
+# Lexora AI Development Rules
+
+You are working on Lexora AI, a SaaS AI Humanizer built with modern best practices.
+
+## Tech Stack
+
+- Next.js 15 (App Router)
+- TypeScript
+- React
+- Tailwind CSS
+- Supabase
+- Polar.sh
+- OpenAI API
+- Vercel
+
+Always preserve this stack.
+
+---
+
+# General Rules
+
+Never rewrite large sections of code unless requested.
+
+Prefer modifying existing files.
+
+Never create duplicate logic.
+
+Never remove working functionality.
+
+Keep code clean, readable and strongly typed.
+
+Always explain which files were changed.
+
+If a change affects other files, mention them.
+
+---
+
+# UI Rules
+
+Maintain the current Lexora branding.
+
+Theme:
+
+- White
+- Purple
+- Clean
+- Modern
+- Minimal
+
+Do not introduce random colors.
+
+Keep everything responsive.
+
+Desktop and mobile must both work.
+
+---
+
+# Code Style
+
+Use TypeScript.
+
+Avoid "any".
+
+Prefer reusable functions.
+
+Extract repeated logic.
+
+Prefer server components when possible.
+
+Only use client components when required.
+
+---
+
+# Authentication
+
+Authentication uses Supabase.
+
+Never break authentication.
+
+Always preserve:
+
+- Login
+- Signup
+- Reset Password
+- Session handling
+
+Never expose service role keys.
+
+---
+
+# Database
+
+Supabase is the source of truth.
+
+Never hardcode user data.
+
+Always use authenticated user IDs.
+
+Use existing tables whenever possible.
+
+---
+
+# API Routes
+
+API routes live inside:
+
+app/api
+
+Validate all inputs.
+
+Return proper status codes.
+
+Handle errors gracefully.
+
+Never expose secrets.
+
+---
+
+# Pricing
+
+Pricing is powered by Polar.
+
+Never hardcode checkout URLs.
+
+Always use:
+
+/api/checkout
+
+Products come from environment variables.
+
+Supported plans:
+
+- Silver
+- Gold
+- Premium
+
+Supported billing:
+
+- Monthly
+- Yearly
+
+Never remove yearly support.
+
+---
+
+# Environment Variables
+
+Never rename environment variables unless asked.
+
+Always preserve variables like:
+
+OPENAI_API_KEY
+
+NEXT_PUBLIC_SUPABASE_URL
+
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+POLAR_ACCESS_TOKEN
+
+POLAR_*_PRODUCT_ID
+
+---
+
+# Dashboard
+
+Dashboard includes:
+
+- Documents
+- Usage
+- Pricing
+- Settings
+- Support
+
+Never remove existing features.
+
+---
+
+# Humanizer
+
+The Humanizer is the core product.
+
+Prioritize:
+
+High quality output.
+
+Natural writing.
+
+Fast response.
+
+Maintain usage limits.
+
+---
+
+# Performance
+
+Prefer efficient code.
+
+Avoid unnecessary rerenders.
+
+Avoid duplicated API requests.
+
+Lazy load when appropriate.
+
+---
+
+# Security
+
+Never expose:
+
+API keys
+
+Access tokens
+
+Secrets
+
+Always validate requests.
+
+Always sanitize inputs.
+
+---
+
+# Git
+
+Never modify .env.local.
+
+Never commit secrets.
+
+Never delete project files without confirmation.
+
+---
+
+# Before Finishing
+
+Before completing any task:
+
+✔ Check TypeScript errors.
+
+✔ Preserve existing functionality.
+
+✔ Keep responsive layout.
+
+✔ Explain changes.
+
+✔ Mention any follow-up recommendations.

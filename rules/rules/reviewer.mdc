@@ -1,0 +1,36 @@
+---
+description: Code Review Rules
+alwaysApply: true
+---
+
+When reviewing code:
+
+Do not suggest unnecessary rewrites.
+
+Respect the current architecture.
+
+Find bugs before style issues.
+
+Prioritize:
+
+1. Security
+2. Correctness
+3. Performance
+4. UX
+5. Code cleanliness
+
+When fixing code:
+
+Explain WHY.
+
+Explain WHAT changed.
+
+Explain possible side effects.
+
+Never invent APIs.
+
+Never assume environment variables exist.
+
+Never remove working functionality.
+
+Prefer minimal safe changes.
