@@ -243,6 +243,15 @@ function cleanOutput(text: string): string {
   cleaned = removeDuplicateTailArtifacts(cleaned);
   return cleaned.trim();
 }
+// Replace common AI detector trigger phrases with natural human alternatives
+function replaceAIDetectorTriggers(text: string): string {
+  return text
+    .replace(/in today's fast-paced world/gi, "these days")
+    .replace(/a profound impact/gi, "a real effect")
+    .replace(/vying for our attention/gi, "competing for focus")
+    .replace(/respite from the chaos/gi, "break from everything")
+    .replace(/it's not just (.+?) that benefits/gi, "beyond just $1");
+}
 
 // Clean up synthetic formatting while preserving paragraph spacing
 function PostProcessHumanize(text: string): string {
@@ -287,6 +296,10 @@ function PostProcessHumanize(text: string): string {
 
   // Trim duplicate closing summary paragraphs / repeated ending sentences
   cleaned = removeDuplicateTailArtifacts(cleaned);
+
+  // 1. Run the AI detector trigger replacer
+  cleaned = replaceAIDetectorTriggers(cleaned);
+
   return cleaned.trim();
 }
 
@@ -302,30 +315,17 @@ function buildSystemPrompt(
   const minWords = Math.round(inputWordCount * 0.92);
   const maxWords = Math.round(inputWordCount * 1.08);
 
-  return `You are a human essayist rewriting text to eliminate all statistical AI detection signatures.
+  return `You are a casual human blog writer and essayist. Your task is to completely rewrite the text so that it reads like an authentic, unfiltered human writing off the cuff.
 
-CRITICAL TARGET LENGTH:
-Target word count: ~${inputWordCount} words (strict range: ${minWords} to ${maxWords} words). Do not summarize or expand artificially.
+CRITICAL LENGTH: Target length is ~${inputWordCount} words (${minWords}-${maxWords} range).
 
-ANTI-DETECTION LAWS (HUMAN CADENCE ENFORCEMENT):
-1. BREAK SENTENCE-BY-SENTENCE CORRESPONDENCE:
-   - Do NOT rewrite sentence 1, then sentence 2, then sentence 3 in order.
-   - Combine adjacent ideas, flip clause orders, and rephrase entire thoughts from scratch.
-2. STAGGER SENTENCE LENGTHS (HIGH BURSTINESS):
-   - Never write three medium-length sentences in a row. 
-   - Mix ultra-short punchy statements (3–6 words) with long, multi-clause thoughts (20–30 words).
-3. STRICT PROHIBITION ON TRANSITIONAL FILLER:
-   - NEVER start paragraphs or sentences with: "And let's be honest", "The benefits extend far beyond", "It's worth noting that", "As we meditate", "By focusing on", or "Finding time to".
-4. VOICE & PHRASING:
-   - Use direct, conversational, and active phrasing instead of generic reflection.
-   - Use natural contractions (it's, don't, you'll, that's).
+HUMAN PROSE ENFORCEMENT RULES:
+1. NO FORMAL STRUCTURE: Do NOT write topic sentences or formal concluding lines for paragraphs. Just jump straight into the thoughts.
+2. VARY LENGTH EXTREMELY: Alternate between long, rambling thoughts connected with em-dashes or commas, and short 3-to-4 word punchy statements.
+3. ABSOLUTE BAN ON AI ESSAY TRANSITIONS: Never use "another benefit is", "it's not just", "in the end", "profound impact", "respite", "vying for attention", or "in a world that's".
+4. WRITE LIKE A PERSON TALKING: Use active verbs, natural contractions (it's, don't, you're, wouldn't), and realistic cadence.
 
-Return ONLY the rewritten text without commentary, titles, or tags.
-
-${isRetry ? "RETRY DIRECTIVE: The previous attempt matched the source paragraph rhythm too closely. Restructure clauses and rephrase sentence beginnings completely." : ""}
-
-MODE: ${modeName} - ${modeInstruction}
-TONE: ${toneName} - ${toneInstruction}`;
+Return ONLY the rewritten text without titles, intros, or quotes.`;
 }
 
 export async function POST(req: Request) {
