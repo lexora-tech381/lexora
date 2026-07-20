@@ -1,7 +1,7 @@
 import Together from "together-ai";
 
 const MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo";
-const TEMPERATURE = 0.88;
+const TEMPERATURE = 0.9;
 const MAX_TEXT_LENGTH = 12_000;
 
 const MODE_INSTRUCTIONS: Record<string, string> = {
@@ -92,23 +92,36 @@ function buildSystemPrompt(
   toneInstruction: string,
   inputWordCount: number,
 ): string {
-  return `You are an elite academic essayist and expert human editor. Your goal is to rewrite the text into flawless, beautifully written, proper English while completely bypassing advanced AI detectors (Turnitin, GPTZero, Originality). 
+  return `You are an expert human editor.
 
-You must strictly avoid poor grammar, slang, conversational fillers (do not use: honestly, yeah, no joke, let's be real), and weird punctuation (no ellipses or excessive dashes).
+Your task is to rewrite the user's text so it sounds natural, fluent, and well written while preserving the original meaning, facts, examples, and intent.
 
-To bypass detectors while writing beautifully, you must strictly implement these advanced linguistic rules:
-1. HIGHLY COMPLEX SYNTAX SHIFTING: AI text structures are highly linear (Subject-Verb-Object). You must write like an advanced human author using complex sentence configurations. Start sentences with introductory participial phrases, conditional clauses, or inverted syntax (e.g., instead of "Meditation reduces stress because it calms the mind," write "By calming the central nervous system, regular meditative practice inherently mitigates the onset of daily stress.").
-2. UNCOMMON FORMAL COLLOCATIONS: Replace typical AI word combinations with sophisticated human alternatives. (e.g., replace "valuable tool" with "indispensable asset", replace "improves concentration" with "fortifies cognitive endurance", replace "manage emotions" with "navigate emotional volatility").
-3. IRREGULAR ACADEMIC FLOW: Mix very long, structurally dense academic sentences (30-40 words containing multiple clauses and semicolons) with clean, elegant, short declarative sentences (6-10 words). This irregular pattern completely shatters AI burstiness detectors.
-4. CHAMELEON TRANSITIONS: Eliminate generic transitional signals ("Furthermore", "Moreover", "In conclusion", "Additionally"). Use elegant contextual connections like "This cognitive recalibration proves particularly crucial when...", "A secondary yet equally vital element lies in...", or "Ultimately, the practice yields...".
+Writing requirements:
+- Preserve all factual information and key ideas.
+- Do not invent, remove, or change information.
+- Write in clear, natural English.
+- Vary sentence length naturally.
+- Mix short, medium, and longer sentences where appropriate.
+- Use smooth transitions only when they improve readability.
+- Avoid repetitive sentence openings and repetitive wording.
+- Prefer precise, everyday language over unnecessarily formal vocabulary.
+- Keep paragraphs well organized with logical flow.
+- Rewrite sentences instead of making simple synonym substitutions.
+- Preserve quotations, names, numbers, citations, and technical terms unless instructed otherwise.
+- Match the selected tone and rewriting mode.
+- Keep approximately the same length unless the selected mode requires otherwise.
+- Never output bullet points unless the input uses them.
+- Never add explanations, introductions, notes, or commentary.
+- Return only the rewritten text.
 
-CONSTRAINTS:
-* Keep 100% of the original information, factual data, and core arguments perfectly intact.
-* Output ONLY the final, polished, proper essay. Do not include any introductory remarks.
+SELECTED MODE: ${modeName}
+MODE INSTRUCTIONS: ${modeInstruction}
 
-SELECTED MODE: ${modeName} (${modeInstruction})
-SELECTED TONE: ${toneName} (${toneInstruction})
-TARGET WORD COUNT: ~${inputWordCount} words.`;
+SELECTED TONE: ${toneName}
+TONE INSTRUCTIONS: ${toneInstruction}
+
+ORIGINAL WORD COUNT: ${inputWordCount}
+Keep the rewritten version approximately within 85% to 115% of the original word count unless the selected mode requires otherwise.`;
 }
 
 export async function POST(req: Request) {
