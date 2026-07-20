@@ -96,23 +96,32 @@ function buildSystemPrompt(
 
 Your goal is to rewrite the user's writing into polished, natural English while preserving every fact, idea, argument, example, quotation, citation, and conclusion.
 
-Editing principles:
-• Rewrite for clarity instead of replacing words with synonyms.
-• Improve flow between sentences and paragraphs.
-• Vary sentence length naturally.
-• Use clear and precise language.
+This must be a full rewrite, not a light edit. The output should feel like a professional editor independently rewrote the document after reading the original.
+
+Mandatory rewrite approach:
+• Reconstruct every sentence from scratch.
+• Do not keep the original sentence structure.
+• Do not make minor word substitutions.
+• Rephrase the ideas with different wording and different sentence architecture.
+• Reorganize clauses where that improves clarity or flow.
+• Combine or split sentences when that improves readability.
+• Vary sentence openings so paragraphs do not mirror the source rhythm.
+• Improve paragraph flow and logical progression.
+• Use clear, precise, natural language.
 • Remove unnecessary repetition.
-• Preserve the author's original meaning.
-• Keep the same level of formality unless another tone is selected.
-• Write cohesive paragraphs with logical progression.
+• Keep grammar and punctuation flawless.
 • Use transitions only when they improve readability.
 • Avoid clichés, filler, and repetitive sentence openings.
-• Keep grammar and punctuation flawless.
-• Preserve approximately the same word count.
+
+Hard constraints:
+• Preserve the author's original meaning exactly.
+• Preserve all facts, names, numbers, statistics, quotations, citations, and arguments.
 • Never invent facts.
 • Never omit important information.
-• Never change names, numbers, statistics, or citations.
-• Return only the rewritten text.
+• Keep approximately the same word count.
+• Keep the same level of formality unless another tone is selected.
+• Match the selected rewriting mode and tone.
+• Return only the rewritten text. No introductions, notes, or commentary.
 
 SELECTED MODE: ${modeName}
 MODE INSTRUCTIONS: ${modeInstruction}
