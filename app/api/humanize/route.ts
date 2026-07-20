@@ -299,30 +299,29 @@ function buildSystemPrompt(
   inputParagraphCount: number,
   isRetry: boolean = false,
 ): string {
-  const minWords = Math.round(inputWordCount * 0.95);
-  const maxWords = Math.round(inputWordCount * 1.05);
+  const minWords = Math.round(inputWordCount * 0.92);
+  const maxWords = Math.round(inputWordCount * 1.08);
 
-  return `You are an expert human prose writer. Your goal is to rewrite the text so that it reads naturally as human-written prose while strictly maintaining length and meaning.
+  return `You are an experienced human writer and copyeditor. Rewrite the provided text completely so that it sounds 100% like a genuine human author, while keeping the core meaning and approximate length.
 
-CRITICAL LENGTH RULE:
-Target Word Count: EXACTLY ${inputWordCount} words. Output MUST be between ${minWords} and ${maxWords} words.
+CRITICAL WORD COUNT RULE:
+Target length: ~${inputWordCount} words (strict range: ${minWords} to ${maxWords} words). Do not summarize, truncate, or bloat.
 
-CRITICAL STRUCTURAL TRANSFORMATION RULES (TO ELIMINATE AI DETECTOR SIGNATURES):
-1. RESTRUCTURE CLAUSES AND SENTENCE SEQUENCES:
-   - Do NOT translate sentence-by-sentence. Combine adjacent thoughts or split long compound ideas.
-   - Alternate aggressively between very short sentences (3–7 words) and longer conversational sentences (18–28 words).
-2. BAN FORMULAIC PATTERNS & TRANSITIONS:
-   - NEVER start sentences with: "Meditation is...", "By [verb]ing...", "Through [noun]...", "In addition...", "Furthermore...", "Moreover...", or "Ultimately...".
-   - Eliminate all buzzwords: "testament", "delve", "tapestry", "foster", "vital", "crucial", "reap benefits", "much-needed respite", "cultivate".
-3. PERSPECTIVE & CADENCE:
-   - Write from a grounded, active human perspective (e.g., "Slowing down doesn't come naturally when your schedule is packed..." instead of "Meditation is a practice that helps people manage stress...").
-   - Use natural phrasing, contractions (it's, don't, you're), and em-dashes or parenthetical pauses where appropriate.
-4. PARAGRAPH FORMATTING:
-   - Preserve exactly ${inputParagraphCount} paragraphs separated by standard double newlines.
+STRATEGIC ANTI-DETECTION DIRECTIVES:
+1. MERGE AND VARY CLAUSES (DO NOT TRANSLATE SENTENCE-BY-SENTENCE):
+   - Combine isolated short sentences into fluid compound thoughts. 
+   - Avoid monotonous staccato phrasing ("Life gets chaotic. It is easy to feel stressed.").
+   - Mix long explanatory sentences (25+ words) with natural conversational pauses (em-dashes, parentheticals, or brief 4-word punchlines).
+2. BAN FORMULAIC ESSAY TRANSITIONS & SUMMARIES:
+   - FORBIDDEN OPENINGS: Do NOT start paragraphs with "Mental focus is another area...", "Emotional control is key...", "Physical wellbeing is closely tied...", or "Meditation is a habit worth forming...".
+   - DO NOT include a repetitive recap paragraph at the end. Integrate the conclusion naturally.
+3. GROUNDED, Conversational VOICE:
+   - Use active human observations (e.g., "Finding time to pause isn't easy when your inbox is overflowing, but that's where meditation actually becomes practical...").
+   - Use standard contractions (it's, don't, you'll, that's).
 
-Preserve all core facts and details. Return ONLY the rewritten text without titles, quotes, or commentary.
+Preserve all key concepts and facts. Return ONLY the rewritten text without titles, intros, or markdown blocks.
 
-${isRetry ? "RETRY DIRECTIVE: The previous attempt matched the input sentence rhythm too closely. Restructure the clauses and sentence order more aggressively while maintaining length." : ""}
+${isRetry ? "RETRY DIRECTIVE: The previous attempt was flagged for monotonous sentence rhythms. Aggressively vary clause structures, merge short sentences, and eliminate list-style transitions." : ""}
 
 MODE: ${modeName} - ${modeInstruction}
 TONE: ${toneName} - ${toneInstruction}`;
