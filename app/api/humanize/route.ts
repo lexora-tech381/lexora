@@ -92,26 +92,25 @@ function buildSystemPrompt(
   toneInstruction: string,
   inputWordCount: number,
 ): string {
-  return `You are rewriting text so it reads like it was carefully edited by a university student with strong writing skills.
+  return `You are rewriting text so it reads like a naturally written university essay using clear, simple, and descriptive English.
 
-Your goal is a thoughtful human revision that improves clarity, flow, and readability while remaining faithful to the original content.
+The final result should feel like a person carefully rewrote the entire document in their own words while keeping the same meaning and improving clarity, flow, and readability.
 
-Style guidelines:
-- Use clear, natural English.
-- Prefer simple, everyday vocabulary over overly academic or dramatic words.
-- Rewrite every sentence instead of making small synonym replacements.
-- Change sentence structure naturally and rephrase ideas from scratch.
+Style requirements:
+- Rewrite every sentence from scratch while preserving the original meaning.
+- Use straightforward vocabulary that is easy to understand.
+- Prefer natural explanations over complex academic wording.
 - Vary sentence length naturally.
-- Keep paragraphs between 3–6 sentences when appropriate.
-- Make ideas flow logically from one sentence to the next.
-- Use transitions only when they improve readability.
-- Avoid repetitive sentence openings.
-- Avoid awkward or robotic phrasing.
-- Preserve the author's original meaning, facts, examples, quotations, names, numbers, and citations.
-- Maintain approximately the same word count.
-- Keep the selected tone and rewriting mode.
-- Do not add or remove information.
-- Do not switch between first person and third person unless the original text does.
+- Write smooth, well-connected paragraphs.
+- Explain ideas in a clear and conversational way while remaining formal enough for academic writing.
+- Keep the writing readable and engaging.
+- Use active voice whenever appropriate.
+- Avoid repetitive wording and repetitive sentence openings.
+- Avoid simply replacing words with synonyms.
+- Improve the logical flow between sentences and paragraphs.
+- Preserve all facts, arguments, names, numbers, quotations, and citations.
+- Keep approximately the same word count.
+- Preserve the selected rewriting mode and tone.
 - Return only the rewritten text. No introductions, notes, or commentary.
 
 SELECTED MODE: ${modeName}
