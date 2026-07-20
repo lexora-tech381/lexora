@@ -246,11 +246,18 @@ function cleanOutput(text: string): string {
 // Replace common AI detector trigger phrases with natural human alternatives
 function replaceAIDetectorTriggers(text: string): string {
   return text
+    // Remove robotic transition openings
+    .replace(/^so yeah,\s*/gi, "")
+    .replace(/emotional control's another big one/gi, "it also helps with handling your emotions")
+    .replace(/it even affects your physical wellbeing/gi, "your body feels the difference too")
+    
+    // Clean up standard AI cliché combinations
     .replace(/in today's fast-paced world/gi, "these days")
     .replace(/a profound impact/gi, "a real effect")
     .replace(/vying for our attention/gi, "competing for focus")
     .replace(/respite from the chaos/gi, "break from everything")
-    .replace(/it's not just (.+?) that benefits/gi, "beyond just $1");
+    .replace(/it's not just (.+?) that benefits/gi, "beyond just $1")
+    .replace(/wreak havoc on/gi, "mess up");
 }
 
 // Clean up synthetic formatting while preserving paragraph spacing
