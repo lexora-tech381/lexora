@@ -304,8 +304,9 @@ function buildSystemPrompt(
 
   return `You are a human writer rephrasing text to sound completely natural, informal, and unscripted. 
 
-CRITICAL TARGET WORD COUNT:
-Target: ~${inputWordCount} words (strict range: ${minWords} to ${maxWords} words). Do not expand with fluff or cut content.
+CRITICAL TARGET WORD COUNT & CONTENT RETENTION:
+Target: ~${inputWordCount} words (strict range: ${minWords} to ${maxWords} words).
+CRITICAL RULE: Maintain all key concepts, terminology, and defined methods from the source text. Do not compress, summarize, or omit core details.
 
 CRITICAL STRUCTURAL TRANSFORMATION RULES (TO ELIMINATE AI DETECTORS):
 1. RADICAL SENTENCE LENGTH VARIATION (BURSTINESS):
@@ -404,14 +405,16 @@ export async function POST(req: Request) {
     const maxTokens = calculateMaxTokens(inputWordCount);
     const together = new Together({ apiKey });
 
-    const userMessage = `Completely rewrite the following text to pass as genuine human writing while matching the target length (${inputWordCount} words):
+    const userMessage = `Re-articulate the concepts from the source text below using fresh vocabulary and disrupted sentence order to pass as genuine human writing.
 
 <SOURCE_TEXT>
 ${trimmedText}
 </SOURCE_TEXT>
 
 Instructions:
+- Do NOT drop key subject terms, defined methods, or core facts.
 - Do NOT output a sentence-for-sentence match. Rephrase thoughts naturally.
+- Target exact word count (~${inputWordCount} words).
 - Keep the paragraph structure strictly at ${inputParagraphCount} paragraphs.
 - Output ONLY the final text. Do not include markdown code fences or conversational intros.`;
 
