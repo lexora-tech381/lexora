@@ -3,7 +3,7 @@ import Together from "together-ai";
 const MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo";
 const MAX_TEXT_LENGTH = 12_000;
 
-// Words commonly flagged by AI detectors
+// Words heavily flagged by AI detectors
 const BANNED_AI_WORDS = [
   "delve",
   "tapestry",
@@ -27,47 +27,35 @@ const BANNED_AI_WORDS = [
   "respite",
   "profound",
   "unparalleled",
+  "increasingly",
 ];
 
-// Robotic transitions & cliché AI phrases
 const BANNED_PATTERNS = [
-  "one big benefit",
-  "but that's not all",
-  "so what about",
-  "simple yet powerful",
-  "make a big difference",
-  "it's a chance for your mind to rest",
   "in today's fast-paced world",
-  "reap numerous benefits",
-  "much-needed respite",
-  "in terms of its benefits",
-  "cultivate a greater sense",
-  "muscle that gets stronger",
+  "plays a crucial role",
+  "it is important to note",
   "so what does it all add up to",
+  "simple yet powerful",
+  "a chance for your mind to rest",
 ];
 
 const MODE_INSTRUCTIONS: Record<string, string> = {
-  Free: "Make light improvements to grammar, clarity, flow, and naturalness while keeping the original structure close to the source.",
-  Standard:
-    "Rewrite more fully using natural sentence variety, smoother transitions, clearer wording, and less repetitive phrasing.",
-  Academic:
-    "Use formal but readable academic language, logical structure, precise wording, and cautious claims. Do not invent sources, citations, evidence, or arguments.",
-  Simple:
-    "Use clear vocabulary, shorter sentences, and easy-to-understand phrasing while preserving all important meaning.",
-  Professional:
-    "Use polished, concise, workplace-appropriate language that still sounds natural.",
-  Creative:
-    "Use more expressive and engaging language while preserving the original message and facts.",
+  Free: "Make light improvements to flow and naturalness while keeping the sentence structure close to the original.",
+  Standard: "Rewrite thoroughly using natural phrasing, organic sentence variety, and conversational flow.",
+  Academic: "Rewrite in clear, formal academic prose without robotic filler or generic topic openings.",
+  Simple: "Use clear, plain language and simple sentences while keeping every core detail.",
+  Professional: "Use direct, professional language that sounds natural and written by an experienced human.",
+  Creative: "Use engaging, vivid language while preserving all original facts.",
 };
 
 const TONE_INSTRUCTIONS: Record<string, string> = {
-  Natural: "Sound relaxed, fluent, realistic, and not overly polished.",
-  Formal: "Use respectful, structured, and formal language.",
-  Friendly: "Use warm, approachable, and conversational wording.",
-  Professional: "Use confident, concise, and business-appropriate language.",
-  Academic: "Use clear formal language suitable for university work.",
-  Confident: "Use direct, assured wording without exaggeration.",
-  Simple: "Use plain vocabulary and straightforward sentences.",
+  Natural: "Relaxed, authentic, and completely unscripted.",
+  Formal: "Structured, clear, and professional.",
+  Friendly: "Warm, conversational, and direct.",
+  Professional: "Polished and business-appropriate.",
+  Academic: "Analytical and precise.",
+  Confident: "Direct and assertive.",
+  Simple: "Plain and clear.",
 };
 
 function resolveMode(mode: string): { name: string; instruction: string } {
@@ -87,144 +75,21 @@ function countWords(text: string): number {
 }
 
 function calculateMaxTokens(inputWordCount: number): number {
-  const estimatedTokens = Math.ceil(inputWordCount * 1.8);
-  return Math.min(3000, Math.max(300, estimatedTokens));
-}
-
-// Statistical calculation for Burstiness (Sentence Length Standard Deviation)
-function calculateBurstiness(text: string): number {
-  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-  const lengths = sentences.map((s) => s.trim().split(/\s+/).length);
-
-  if (lengths.length <= 1) return 10; // Pass if single sentence
-
-  const mean = lengths.reduce((a, b) => a + b, 0) / lengths.length;
-  const variance =
-    lengths.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / lengths.length;
-  return Math.sqrt(variance);
-}
-
-function hasBannedWordsOrPatterns(text: string): boolean {
-  const lower = text.toLowerCase();
-  const wordCheck = BANNED_AI_WORDS.some((word) => lower.includes(word));
-  const patternCheck = BANNED_PATTERNS.some((pattern) => lower.includes(pattern));
-  return wordCheck || patternCheck;
-}
-
-function normalizeComparableText(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function sentenceOverlapRatio(a: string, b: string): number {
-  const aWords = normalizeComparableText(a).split(" ").filter(Boolean);
-  const bWords = new Set(normalizeComparableText(b).split(" ").filter(Boolean));
-  if (aWords.length === 0 || bWords.size === 0) return 0;
-  const overlap = aWords.filter((word) => bWords.has(word)).length;
-  return overlap / Math.max(aWords.length, bWords.size);
-}
-
-function splitSentences(paragraph: string): string[] {
-  return (
-    paragraph
-      .match(/[^.!?]+[.!?]+|[^.!?]+$/g)
-      ?.map((sentence) => sentence.trim())
-      .filter(Boolean) || [paragraph.trim()]
-  );
-}
-
-function removeDuplicateTailArtifacts(text: string): string {
-  const paragraphs = text
-    .split(/\n\s*\n/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean);
-
-  if (paragraphs.length === 0) return text.trim();
-
-  while (paragraphs.length > 1) {
-    const last = paragraphs[paragraphs.length - 1];
-    const previous = paragraphs[paragraphs.length - 2];
-    const lastNorm = normalizeComparableText(last);
-    const previousNorm = normalizeComparableText(previous);
-
-    const duplicatesEarlier = paragraphs.slice(0, -1).some((paragraph) => {
-      const candidate = normalizeComparableText(paragraph);
-      return (
-        candidate === lastNorm ||
-        (lastNorm.length > 40 &&
-          (candidate.includes(lastNorm) || lastNorm.includes(candidate))) ||
-        sentenceOverlapRatio(last, paragraph) >= 0.85
-      );
-    });
-
-    if (
-      duplicatesEarlier ||
-      lastNorm === previousNorm ||
-      sentenceOverlapRatio(last, previous) >= 0.85
-    ) {
-      paragraphs.pop();
-      continue;
-    }
-
-    break;
-  }
-
-  const finalSentences = splitSentences(paragraphs[paragraphs.length - 1]);
-  while (finalSentences.length > 1) {
-    const lastSentence = finalSentences[finalSentences.length - 1];
-    const previousSentence = finalSentences[finalSentences.length - 2];
-
-    if (
-      normalizeComparableText(lastSentence) ===
-        normalizeComparableText(previousSentence) ||
-      sentenceOverlapRatio(lastSentence, previousSentence) >= 0.85
-    ) {
-      finalSentences.pop();
-      continue;
-    }
-
-    const restatesEarlier = finalSentences.slice(0, -1).some(
-      (sentence) => sentenceOverlapRatio(lastSentence, sentence) >= 0.9,
-    );
-    if (restatesEarlier) {
-      finalSentences.pop();
-      continue;
-    }
-
-    break;
-  }
-
-  paragraphs[paragraphs.length - 1] = finalSentences
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  return paragraphs.join("\n\n");
+  const estimatedTokens = Math.ceil(inputWordCount * 2.2);
+  return Math.min(3500, Math.max(400, estimatedTokens));
 }
 
 function cleanOutput(text: string): string {
   let cleaned = text.trim();
 
-  if (/^```(?:\w+)?\s*\n[\s\S]*\n```$/m.test(cleaned)) {
-    cleaned = cleaned
-      .replace(/^```(?:\w+)?\s*\n/, "")
-      .replace(/\n```$/, "")
-      .trim();
-  } else {
-    cleaned = cleaned
-      .replace(/^```(?:\w+)?\s*\n?/, "")
-      .replace(/\n?```$/, "")
-      .trim();
-  }
+  // Strip code blocks
+  cleaned = cleaned.replace(/^```(?:\w+)?\s*\n?/, "").replace(/\n?```$/, "").trim();
 
+  // Strip prefix conversational headers
   const prefixes = [
     /^Here is the rewritten text:\s*/i,
     /^Rewritten version:\s*/i,
     /^Here is the humanized version:\s*/i,
-    /^Here is the rewritten version:\s*/i,
     /^Humanized version:\s*/i,
     /^Rewritten text:\s*/i,
   ];
@@ -233,60 +98,24 @@ function cleanOutput(text: string): string {
     cleaned = cleaned.replace(prefix, "");
   }
 
-  cleaned = removeDuplicateTailArtifacts(cleaned);
   return cleaned.trim();
 }
 
 function replaceAIDetectorTriggers(text: string): string {
   return text
-    .replace(/\bso what does it all add up to\?\s*/gi, "")
-    .replace(/\bsimple yet powerful\b/gi, "practical")
-    .replace(/\bmuscle that gets stronger with practice\b/gi, "skill you get better at over time")
     .replace(/\bin today's fast-paced world\b/gi, "these days")
     .replace(/\ba profound impact\b/gi, "a real effect")
-    .replace(/\bvying for our attention\b/gi, "competing for focus")
-    .replace(/\brespite from the chaos\b/gi, "break from everything")
-    .replace(/\bwreak havoc on\b/gi, "mess up")
-    .replace(/\ba much-needed respite\b/gi, "a real break")
-    .replace(/\btransform lives in profound ways\b/gi, "make a genuine difference")
-    .replace(/\bis unparalleled\b/gi, "works surprisingly well");
+    .replace(/\bplays a crucial role in\b/gi, "helps with")
+    .replace(/\bmake a big difference\b/gi, "help quite a bit");
 }
 
-function PostProcessHumanize(text: string): string {
+function postProcessHumanize(text: string): string {
   let cleaned = text.replace(/\r\n/g, "\n");
-
-  cleaned = cleaned.replace(/\\n\\n/g, "\n\n");
-  cleaned = cleaned.replace(/\\n/g, "\n");
-
-  cleaned = cleaned.replace(/!{1,}/g, ".");
+  cleaned = cleaned.replace(/!{2,}/g, ".");
   cleaned = cleaned.replace(/\.{2,}/g, ".");
   cleaned = cleaned.replace(/[^\S\n]{2,}/g, " ");
 
-  cleaned = cleaned.replace(
-    /(?:\n|^)\s*(?:```[\s\S]*$|<\|[\s\S]*$|\[\/?INST\][\s\S]*$)/gi,
-    "",
-  );
-  cleaned = cleaned.replace(
-    /\n+(?:Output|Note|Explanation|Rewritten text|Here is)[:\s][\s\S]*$/i,
-    "",
-  );
-  cleaned = cleaned.replace(/[\s]*[^\w\s.,;:'"()\-–—?]{8,}[\s\S]*$/u, "");
-  cleaned = cleaned.replace(/(?:\s*[.…]{3,}\s*)+$/g, "");
-
-  cleaned = cleaned
-    .split(/\n\s*\n/)
-    .map((paragraph) =>
-      paragraph
-        .replace(/[ \t]+/g, " ")
-        .replace(/\n+/g, " ")
-        .trim(),
-    )
-    .filter(Boolean)
-    .join("\n\n");
-
-  cleaned = removeDuplicateTailArtifacts(cleaned);
   cleaned = replaceAIDetectorTriggers(cleaned);
-
   return cleaned.trim();
 }
 
@@ -296,44 +125,32 @@ function buildSystemPrompt(
   toneName: string,
   toneInstruction: string,
   inputWordCount: number,
-  inputParagraphCount: number,
-  isRetry: boolean = false,
 ): string {
-  const minWords = Math.round(inputWordCount * 0.93);
-  const maxWords = Math.round(inputWordCount * 1.05);
+  const minWords = Math.max(15, Math.round(inputWordCount * 0.88));
+  const maxWords = Math.round(inputWordCount * 1.12);
 
-  return `You are a human writer rephrasing text to sound completely natural, informal, and unscripted. 
+  return `You are an expert human editor re-writing text so it passes stealth AI detectors (Turnitin, GPTZero, CopyLeaks).
 
-CRITICAL TARGET WORD COUNT & CONTENT RETENTION:
-Target: ~${inputWordCount} words (strict range: ${minWords} to ${maxWords} words).
-CRITICAL RULE: Maintain all key concepts, terminology, and defined methods from the source text. Do not compress, summarize, or omit core details.
+CRITICAL REQUIREMENT - ZERO INFORMATION LOSS & ACCURATE LENGTH:
+- Length Target: ~${inputWordCount} words (Allowed range: ${minWords} to ${maxWords} words).
+- You MUST retain EVERY single fact, definition, method, and concept from the source text. Do NOT summarize or drop details.
 
-CRITICAL STRUCTURAL TRANSFORMATION RULES (TO ELIMINATE AI DETECTORS):
-1. RADICAL SENTENCE LENGTH VARIATION (BURSTINESS):
-   - You MUST mix sentence lengths aggressively. 
-   - Follow a long, multi-clause explanatory sentence (25–35 words) directly with a short, punchy sentence (3–6 words).
-   - Example pattern: Long sentence with an em-dash or parenthetical thought. Short point. Medium sentence explaining the detail.
+ANTI-DETECTION RULES (PERPLEXITY & BURSTINESS):
+1. VARY SENTENCE LENGTHS DRAMATICALLY:
+   - Combine a long, detailed sentence containing natural punctuation (em-dashes, commas, or parentheses) with a short, direct sentence (4–7 words).
+2. NEVER START WITH DEFINITION PATTERNS:
+   - FORBIDDEN OPENINGS: Do not start with "[Topic] is a...", "In today's...", "It helps people...", or "This practice allows...".
+   - Instead, start with an action, a situational context, or a dependent clause.
+3. SPOKEN TRANSITIONS ONLY:
+   - BANNED: "Furthermore", "Moreover", "Additionally", "In conclusion", "Crucial", "Tapestry", "Delve", "Increasingly".
+   - USE: "On top of that", "In practice", "Instead", "Beyond that", or no transitional phrase at all.
+4. HUMAN PERPLEXITY:
+   - Restructure sentence orders naturally rather than translating phrase-by-phrase.
 
-2. BAN STANDARD ESSAY OPENINGS AND TOPIC SENTENCES:
-   - NEVER open paragraphs with phrases like: "Meditation is...", "Emotional control is...", "In addition to...", "Regular practice can...", "By incorporating...", or "As a tool for...".
-   - Start paragraphs directly in the middle of an action, observation, or real-world scenario.
+MODE: ${modeName} (${modeInstruction})
+TONE: ${toneName} (${toneInstruction})
 
-3. RESTRUCTURE CLAUSES AND SENTENCE SEQUENCES:
-   - DO NOT rephrase sentence-by-sentence in order. Combine concepts from adjacent sentences or flip the cause-and-effect order.
-   - Use natural human punctuation: em-dashes (—), semicolons, and occasional parenthetical pauses.
-
-4. BANNED AI WORDS & PHRASE PATTERNS:
-   - Absolutely forbidden words: "invaluable", "respite", "profound", "unparalleled", "transform lives", "numerous benefits", "crucial", "tapestry", "delve", "foster".
-
-HUMAN PERPLEXITY & STRUCTURAL INJECTORS:
-1. FRAGMENTS & SHORT PUNCHES: Every 3-4 sentences, insert an intentionally abrupt short phrase or sentence fragment (e.g., "Not quite.", "Here is why.", "Simple as that.", "At least, in theory.").
-2. CLAUSE FLIPPING: Never place the main subject at the beginning of two consecutive sentences. Always lead with prepositional phrases, dependent clauses, or transitional elements.
-3. REPLACEMENT OF ABSTRACT TRANSITIONS: Strictly forbid "Additionally", "In conclusion", "Furthermore", "Overall", and "Moreover". Replace them with plain spoken transitions like "Beyond that," "On top of this," or no transition word at all.
-
-MODE: ${modeName} - ${modeInstruction}
-TONE: ${toneName} - ${toneInstruction}
-
-Return ONLY the final rewritten text. No commentary, no title, no quote marks.`;
+Output ONLY the rewritten body text. No intro, no chat, no markdown fences.`;
 }
 
 export async function POST(req: Request) {
@@ -342,7 +159,7 @@ export async function POST(req: Request) {
     if (!apiKey) {
       return Response.json(
         { error: "The rewriting service is temporarily unavailable." },
-        { status: 500 },
+        { status: 500 }
       );
     }
 
@@ -352,14 +169,14 @@ export async function POST(req: Request) {
     } catch {
       return Response.json(
         { error: "Invalid JSON in request body." },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
     if (!body || typeof body !== "object") {
       return Response.json(
         { error: "Invalid request body." },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -369,107 +186,63 @@ export async function POST(req: Request) {
       tone?: unknown;
     };
 
-    if (text === undefined || text === null || typeof text !== "string") {
+    if (typeof text !== "string" || !text.trim()) {
       return Response.json(
-        { error: "Please provide valid text to rewrite." },
-        { status: 400 },
+        { error: "Please enter valid text to rewrite." },
+        { status: 400 }
       );
     }
 
     const trimmedText = text.trim();
-    if (!trimmedText) {
-      return Response.json(
-        { error: "Please enter text to rewrite." },
-        { status: 400 },
-      );
-    }
-
     if (trimmedText.length > MAX_TEXT_LENGTH) {
       return Response.json(
-        {
-          error: `Text is too long. Please keep it under ${MAX_TEXT_LENGTH.toLocaleString()} characters.`,
-        },
-        { status: 400 },
+        { error: `Text exceeds character limit of ${MAX_TEXT_LENGTH.toLocaleString()}.` },
+        { status: 400 }
       );
     }
 
-    const resolvedMode = resolveMode(
-      typeof mode === "string" && mode.trim() ? mode.trim() : "Standard",
-    );
-    const resolvedTone = resolveTone(
-      typeof tone === "string" && tone.trim() ? tone.trim() : "Natural",
-    );
+    const resolvedMode = resolveMode(typeof mode === "string" ? mode.trim() : "Standard");
+    const resolvedTone = resolveTone(typeof tone === "string" ? tone.trim() : "Natural");
 
     const inputWordCount = countWords(trimmedText);
-    const inputParagraphCount = trimmedText.split(/\n\s*\n/).length;
     const maxTokens = calculateMaxTokens(inputWordCount);
     const together = new Together({ apiKey });
 
-    const userMessage = `Re-articulate the concepts from the source text below using fresh vocabulary and disrupted sentence order to pass as genuine human writing.
+    const systemPrompt = buildSystemPrompt(
+      resolvedMode.name,
+      resolvedMode.instruction,
+      resolvedTone.name,
+      resolvedTone.instruction,
+      inputWordCount
+    );
+
+    const userMessage = `Rewrite this text to sound written by a real human while retaining ALL original facts and details:
 
 <SOURCE_TEXT>
 ${trimmedText}
-</SOURCE_TEXT>
+</SOURCE_TEXT>`;
 
-Instructions:
-- Do NOT drop key subject terms, defined methods, or core facts.
-- Do NOT output a sentence-for-sentence match. Rephrase thoughts naturally.
-- Target exact word count (~${inputWordCount} words).
-- Keep the paragraph structure strictly at ${inputParagraphCount} paragraphs.
-- Output ONLY the final text. Do not include markdown code fences or conversational intros.`;
+    const response = await together.chat.completions.create({
+      model: MODEL,
+      temperature: 0.72,
+      top_p: 0.92,
+      max_tokens: maxTokens,
+      presence_penalty: 0.3,
+      frequency_penalty: 0.4,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
+      ],
+    });
 
-    let finalResult = "";
-    let attempts = 0;
-    const maxAttempts = 2;
-
-    while (attempts < maxAttempts) {
-      const isRetry = attempts > 0;
-      const systemPrompt = buildSystemPrompt(
-        resolvedMode.name,
-        resolvedMode.instruction,
-        resolvedTone.name,
-        resolvedTone.instruction,
-        inputWordCount,
-        inputParagraphCount,
-        isRetry,
-      );
-
-      const currentTemperature = isRetry ? 0.78 : 0.68;
-
-      const response = await together.chat.completions.create({
-        model: MODEL,
-        temperature: currentTemperature,
-        top_p: 0.9,
-        max_tokens: maxTokens,
-        presence_penalty: 0.25,
-        frequency_penalty: 0.35,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userMessage },
-        ],
-      });
-
-      const rawChoice = response.choices?.[0]?.message?.content || "";
-      const cleanedChoice = cleanOutput(rawChoice);
-      finalResult = PostProcessHumanize(cleanedChoice);
-
-      const burstinessScore = calculateBurstiness(finalResult);
-      const containsBanned = hasBannedWordsOrPatterns(finalResult);
-      const outputWordCount = countWords(finalResult);
-      const meetsMinWordCount =
-        outputWordCount >= Math.round(inputWordCount * 0.85);
-
-      if ((burstinessScore >= 4.0 && !containsBanned && meetsMinWordCount) || isRetry) {
-        break;
-      }
-
-      attempts++;
-    }
+    const rawChoice = response.choices?.[0]?.message?.content || "";
+    const cleanedChoice = cleanOutput(rawChoice);
+    const finalResult = postProcessHumanize(cleanedChoice);
 
     if (!finalResult) {
       return Response.json(
-        { error: "Unable to generate a rewritten result. Please try again." },
-        { status: 500 },
+        { error: "Failed to generate humanized text. Please try again." },
+        { status: 500 }
       );
     }
 
@@ -478,7 +251,7 @@ Instructions:
     console.error("TOGETHER API ERROR:", error);
     return Response.json(
       { error: "Unable to process text. Please try again." },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
