@@ -3,55 +3,23 @@ import Together from "together-ai";
 const MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo";
 const MAX_TEXT_LENGTH = 12_000;
 
-// High-probability AI vocabulary triggers
-const BANNED_AI_WORDS = [
-  "delve",
-  "tapestry",
-  "testament",
-  "crucial",
-  "furthermore",
-  "moreover",
-  "paramount",
-  "pivotal",
-  "underscore",
-  "foster",
-  "beacon",
-  "multifaceted",
-  "leverage",
-  "interplay",
-  "vital",
-  "seamless",
-  "embark",
-  "ultimately",
-  "invaluable",
-  "respite",
-  "profound",
-  "unparalleled",
-  "increasingly",
-  "highlighting",
-  "emphasizing",
-  "subsequently",
-  "comprehensive",
-  "transformative",
-];
-
 const MODE_INSTRUCTIONS: Record<string, string> = {
-  Free: "Improve clarity and flow while keeping the structure close to the original source.",
-  Standard: "Completely re-articulate the prose into organic, unscripted human writing.",
-  Academic: "Rewrite in formal academic language, avoiding generic AI filler and predictable essay structure.",
-  Simple: "Use direct language, accessible vocabulary, and smooth sentences while keeping all facts.",
-  Professional: "Use direct, polished, workplace-appropriate language that reads naturally.",
-  Creative: "Use vivid, expressive language while preserving absolute fidelity to original details.",
+  Free: "Improve clarity while maintaining close proximity to the original phrasing.",
+  Standard: "Rephrase naturally with human sentence inversions, grounded phrasing, and unscripted flow.",
+  Academic: "Rewrite in formal academic prose using varied passive and active structural combinations.",
+  Simple: "Use plain language and direct sentences while keeping every original fact.",
+  Professional: "Use clear, professional language that sounds written by a real person.",
+  Creative: "Use expressive language while preserving absolute accuracy to original details.",
 };
 
 const TONE_INSTRUCTIONS: Record<string, string> = {
-  Natural: "Authentic, conversational, articulate, and completely natural.",
+  Natural: "Authentic, conversational, unscripted, and human.",
   Formal: "Structured, clear, and professional.",
-  Friendly: "Warm, accessible, and direct.",
-  Professional: "Polished and business-ready.",
-  Academic: "Analytical and precise.",
-  Confident: "Direct and assured.",
-  Simple: "Plain and clear.",
+  Friendly: "Warm, direct, and accessible.",
+  Professional: "Polished and business-appropriate.",
+  Academic: "Analytical and formal.",
+  Confident: "Direct and assertive.",
+  Simple: "Plain and accessible.",
 };
 
 function resolveMode(mode: string): { name: string; instruction: string } {
@@ -72,11 +40,8 @@ function countWords(text: string): number {
 
 function cleanOutput(text: string): string {
   let cleaned = text.trim();
-
-  // Strip code blocks
   cleaned = cleaned.replace(/^```(?:\w+)?\s*\n?/, "").replace(/\n?```$/, "").trim();
 
-  // Strip conversational intro prefixes
   const prefixes = [
     /^Here is the rewritten text:\s*/i,
     /^Rewritten version:\s*/i,
@@ -96,15 +61,15 @@ function postProcess(text: string): string {
   let cleaned = text.replace(/\r\n/g, "\n");
   cleaned = cleaned.replace(/[^\S\n]{2,}/g, " ");
 
-  // Replace remaining robotic AI detector triggers
+  // Swap typical polish phrases for grounded human phrasing
   cleaned = cleaned
-    .replace(/\bin today's fast-paced world\b/gi, "these days")
+    .replace(/\bin today's fast-paced world\b/gi, "in busy modern life")
     .replace(/\ba profound impact\b/gi, "a real effect")
-    .replace(/\bplays a crucial role in\b/gi, "helps with")
+    .replace(/\bplays a crucial role in\b/gi, "helps out with")
     .replace(/\bfurthermore\b/gi, "also")
     .replace(/\bmoreover\b/gi, "on top of that")
-    .replace(/\bin addition to\b/gi, "along with")
-    .replace(/\bit is important to note that\b/gi, "keep in mind that");
+    .replace(/\bin addition\b/gi, "along with this")
+    .replace(/\bsignificant\b/gi, "noticeable");
 
   return cleaned.trim();
 }
@@ -117,36 +82,34 @@ function buildSystemPrompt(
   targetWordCount: number,
   paragraphCount: number,
 ): string {
-  const minWords = Math.round(targetWordCount * 0.92);
-  const maxWords = Math.round(targetWordCount * 1.08);
+  const minWords = Math.round(targetWordCount * 0.95);
+  const maxWords = Math.round(targetWordCount * 1.10);
 
-  return `You are a professional editor transforming AI-generated text into 100% human-passing writing.
+  return `You are a human writer rephrasing text to completely bypass AI detection tools.
 
-STRICT LENGTH & CONTENT RULES:
-- Target length: ~${targetWordCount} words (strict range: ${minWords} to ${maxWords} words).
-- Retain exact paragraph count: ${paragraphCount} paragraph(s).
-- Preserve EVERY argument, fact, and detail. Do NOT summarize, shorten, or compress.
+STRICT LENGTH & PARAGRAPH RULES:
+- Target word count: ~${targetWordCount} words (strict range: ${minWords} to ${maxWords} words).
+- Exact paragraph count: ${paragraphCount} paragraph(s).
+- Preserve EVERY argument, fact, and detail from the source. Do NOT shorten or omit information.
 
-STEALTH HUMAN WRITING RULES (ELIMINATES AI DETECTION):
-1. CLAUSE FLIPPING & PREPOSITIONAL LEADS:
-   - AI always starts sentences with the subject: "Meditation helps...", "This practice reduces...".
-   - Break this pattern! Start sentences with prepositional phrases, dependent clauses, or situational context (e.g., "By stepping back for a moment...", "When pressure builds up...", "In regular practice...").
+0% AI DETECTION REWRITE STRATEGY:
+1. USE PASSIVE INVERSIONS & OBJECT-FIRST SENTENCES:
+   - AI writes: "Meditation improves focus and reduces stress."
+   - 0% AI writes: "Focus and stress reduction are frequently improved when meditation is practiced."
+   - Frequently place the outcome or action at the beginning of the sentence rather than starting with the subject.
 
-2. BURSTINESS THROUGH NATURAL CLAUSE VARIATION:
-   - Mix long explanatory sentences naturally with grounded, single-clause observations.
-   - Do NOT use telegraph-style short fragments or weird punctuation like excessive em-dashes or semicolons.
+2. AVOID CLEAN AI VOCABULARY:
+   - Do NOT use standard AI transition words: "Furthermore", "Moreover", "Additionally", "In conclusion", "Crucial", "Vital", "Tapestry", "Delve".
+   - Replace generic corporate terms with descriptive human phrases (e.g., use "educational pressure" or "school duties" instead of "academic stress", "job tasks" instead of "professional responsibilities").
 
-3. BAN FORMULAIC ESSAY TRANSITIONS:
-   - FORBIDDEN: "Additionally", "Furthermore", "Moreover", "In conclusion", "Overall", "As a result", "In summary".
-   - Use plain conversational connections ("On top of that", "Beyond this", "In real terms") or transition seamlessly without transition words.
-
-4. BANNED AI WORDS:
-   - Forbidden: ${BANNED_AI_WORDS.slice(0, 20).join(", ")}.
+3. NATURAL HUMAN REPETITION & RHYTHM:
+   - Allow key terms to repeat naturally across sentences rather than forcing elegant synonyms.
+   - Mix long, multi-clause descriptive sentences with straightforward observations.
 
 MODE: ${modeName} (${modeInstruction})
 TONE: ${toneName} (${toneInstruction})
 
-Output ONLY the final rewritten body text. Maintain exact paragraph line breaks. No introductions, headers, or markdown wrappers.`;
+Output ONLY the final rewritten text. Maintain exact paragraph line breaks. No titles, intros, or markdown headers.`;
 }
 
 export async function POST(req: Request) {
@@ -205,7 +168,6 @@ export async function POST(req: Request) {
     const paragraphs = trimmedText.split(/\n\s*\n/).filter(Boolean);
     const paragraphCount = Math.max(1, paragraphs.length);
 
-    // Calculate max tokens with margin to prevent truncation
     const maxTokens = Math.min(4000, Math.max(600, Math.ceil(wordCount * 2.5)));
 
     const systemPrompt = buildSystemPrompt(
@@ -217,7 +179,7 @@ export async function POST(req: Request) {
       paragraphCount
     );
 
-    const userMessage = `Re-articulate the concepts below using fresh vocabulary and disrupted sentence order to pass as genuine human writing. Preserve all facts and match exact word count (~${wordCount} words):
+    const userMessage = `Re-articulate the source text below using passive sentence inversions and descriptive human phrasing. Maintain exact paragraph structure and target length (~${wordCount} words):
 
 <SOURCE_TEXT>
 ${trimmedText}
@@ -225,11 +187,11 @@ ${trimmedText}
 
     const response = await together.chat.completions.create({
       model: MODEL,
-      temperature: 0.85, // Higher sampling temperature forces unpredictable human word choices
-      top_p: 0.95,
+      temperature: 0.82,
+      top_p: 0.92,
       max_tokens: maxTokens,
-      presence_penalty: 0.2, // Prevents repetitive sentence openings
-      frequency_penalty: 0.3, // Eliminates robotic word recycling
+      presence_penalty: 0.2,
+      frequency_penalty: 0.2,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
