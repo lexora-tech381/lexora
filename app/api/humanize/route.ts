@@ -3,8 +3,8 @@ import Together from "together-ai";
 const MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo";
 const MAX_TEXT_LENGTH = 12_000;
 
-// High-frequency AI patterns and buzzwords to avoid
-const BANNED_AI_PHRASES = [
+// High-probability AI vocabulary triggers
+const BANNED_AI_WORDS = [
   "delve",
   "tapestry",
   "testament",
@@ -28,27 +28,30 @@ const BANNED_AI_PHRASES = [
   "profound",
   "unparalleled",
   "increasingly",
-  "in today's fast-paced world",
-  "it is important to note",
+  "highlighting",
+  "emphasizing",
+  "subsequently",
+  "comprehensive",
+  "transformative",
 ];
 
 const MODE_INSTRUCTIONS: Record<string, string> = {
-  Free: "Lightly polish the phrasing for natural flow while staying very close to the original text.",
-  Standard: "Completely rephrase the text into smooth, authentic human prose while preserving every detail.",
-  Academic: "Rewrite in clear, precise academic language without robotic filler or formulaic transitions.",
-  Simple: "Use simple, direct language and clear sentence structures while keeping all core facts.",
-  Professional: "Use direct, polished, professional tone suitable for workplace communications.",
-  Creative: "Use vivid, engaging phrasing while maintaining strict accuracy to the source content.",
+  Free: "Improve clarity and flow while keeping the structure close to the original source.",
+  Standard: "Completely re-articulate the prose into organic, unscripted human writing.",
+  Academic: "Rewrite in formal academic language, avoiding generic AI filler and predictable essay structure.",
+  Simple: "Use direct language, accessible vocabulary, and smooth sentences while keeping all facts.",
+  Professional: "Use direct, polished, workplace-appropriate language that reads naturally.",
+  Creative: "Use vivid, expressive language while preserving absolute fidelity to original details.",
 };
 
 const TONE_INSTRUCTIONS: Record<string, string> = {
-  Natural: "Conversational, articulate, and completely unscripted.",
+  Natural: "Authentic, conversational, articulate, and completely natural.",
   Formal: "Structured, clear, and professional.",
   Friendly: "Warm, accessible, and direct.",
-  Professional: "Business-ready, clear, and effective.",
-  Academic: "Analytical, formal, and objective.",
-  Confident: "Direct, assertive, and articulate.",
-  Simple: "Plain, accessible, and concise.",
+  Professional: "Polished and business-ready.",
+  Academic: "Analytical and precise.",
+  Confident: "Direct and assured.",
+  Simple: "Plain and clear.",
 };
 
 function resolveMode(mode: string): { name: string; instruction: string } {
@@ -69,11 +72,11 @@ function countWords(text: string): number {
 
 function cleanOutput(text: string): string {
   let cleaned = text.trim();
-  
-  // Remove accidental markdown fences
+
+  // Strip code blocks
   cleaned = cleaned.replace(/^```(?:\w+)?\s*\n?/, "").replace(/\n?```$/, "").trim();
 
-  // Strip conversational introductory prefixes
+  // Strip conversational intro prefixes
   const prefixes = [
     /^Here is the rewritten text:\s*/i,
     /^Rewritten version:\s*/i,
@@ -93,13 +96,15 @@ function postProcess(text: string): string {
   let cleaned = text.replace(/\r\n/g, "\n");
   cleaned = cleaned.replace(/[^\S\n]{2,}/g, " ");
 
-  // Gentle replacements for remaining generic AI transition phrases
+  // Replace remaining robotic AI detector triggers
   cleaned = cleaned
     .replace(/\bin today's fast-paced world\b/gi, "these days")
     .replace(/\ba profound impact\b/gi, "a real effect")
     .replace(/\bplays a crucial role in\b/gi, "helps with")
     .replace(/\bfurthermore\b/gi, "also")
-    .replace(/\bmoreover\b/gi, "on top of that");
+    .replace(/\bmoreover\b/gi, "on top of that")
+    .replace(/\bin addition to\b/gi, "along with")
+    .replace(/\bit is important to note that\b/gi, "keep in mind that");
 
   return cleaned.trim();
 }
@@ -112,27 +117,36 @@ function buildSystemPrompt(
   targetWordCount: number,
   paragraphCount: number,
 ): string {
-  return `You are an expert editor rewriting text so that it reads like genuine, high-quality human writing.
+  const minWords = Math.round(targetWordCount * 0.92);
+  const maxWords = Math.round(targetWordCount * 1.08);
 
-PRIMARY OBJECTIVES:
-1. PRESERVE LENGTH & DETAIL:
-   - Target word count: ~${targetWordCount} words. Keep the output length within 90% to 110% of the target.
-   - Maintain approximately ${paragraphCount} paragraph(s).
-   - Retain every single fact, concept, detail, and nuance from the original text. Do not summarize or cut information.
+  return `You are a professional editor transforming AI-generated text into 100% human-passing writing.
 
-2. HUMAN STYLE & RHYTHM:
-   - Write in complete, articulate, smooth sentences.
-   - Vary sentence structures naturally: mix longer explanatory sentences with concise points.
-   - Avoid generic robotic introductions or formulaic topic statements (e.g., "X is an important concept that...").
-   - Do NOT force weird formatting like excessive semicolons, abrupt fragments, or constant em-dashes. Write fluent, cohesive paragraphs.
+STRICT LENGTH & CONTENT RULES:
+- Target length: ~${targetWordCount} words (strict range: ${minWords} to ${maxWords} words).
+- Retain exact paragraph count: ${paragraphCount} paragraph(s).
+- Preserve EVERY argument, fact, and detail. Do NOT summarize, shorten, or compress.
 
-3. FORBIDDEN WORDS & PHRASES:
-   - Avoid using these overused AI buzzwords: ${BANNED_AI_PHRASES.slice(0, 15).join(", ")}.
+STEALTH HUMAN WRITING RULES (ELIMINATES AI DETECTION):
+1. CLAUSE FLIPPING & PREPOSITIONAL LEADS:
+   - AI always starts sentences with the subject: "Meditation helps...", "This practice reduces...".
+   - Break this pattern! Start sentences with prepositional phrases, dependent clauses, or situational context (e.g., "By stepping back for a moment...", "When pressure builds up...", "In regular practice...").
+
+2. BURSTINESS THROUGH NATURAL CLAUSE VARIATION:
+   - Mix long explanatory sentences naturally with grounded, single-clause observations.
+   - Do NOT use telegraph-style short fragments or weird punctuation like excessive em-dashes or semicolons.
+
+3. BAN FORMULAIC ESSAY TRANSITIONS:
+   - FORBIDDEN: "Additionally", "Furthermore", "Moreover", "In conclusion", "Overall", "As a result", "In summary".
+   - Use plain conversational connections ("On top of that", "Beyond this", "In real terms") or transition seamlessly without transition words.
+
+4. BANNED AI WORDS:
+   - Forbidden: ${BANNED_AI_WORDS.slice(0, 20).join(", ")}.
 
 MODE: ${modeName} (${modeInstruction})
 TONE: ${toneName} (${toneInstruction})
 
-Output strictly the rewritten body text. No greetings, headers, intro notes, or code blocks.`;
+Output ONLY the final rewritten body text. Maintain exact paragraph line breaks. No introductions, headers, or markdown wrappers.`;
 }
 
 export async function POST(req: Request) {
@@ -191,7 +205,7 @@ export async function POST(req: Request) {
     const paragraphs = trimmedText.split(/\n\s*\n/).filter(Boolean);
     const paragraphCount = Math.max(1, paragraphs.length);
 
-    // Calculate max tokens with a healthy safety margin so output is never truncated
+    // Calculate max tokens with margin to prevent truncation
     const maxTokens = Math.min(4000, Math.max(600, Math.ceil(wordCount * 2.5)));
 
     const systemPrompt = buildSystemPrompt(
@@ -203,7 +217,7 @@ export async function POST(req: Request) {
       paragraphCount
     );
 
-    const userMessage = `Rewrite the following text into smooth, complete, natural human prose. Preserve all information and match the target length (~${wordCount} words):
+    const userMessage = `Re-articulate the concepts below using fresh vocabulary and disrupted sentence order to pass as genuine human writing. Preserve all facts and match exact word count (~${wordCount} words):
 
 <SOURCE_TEXT>
 ${trimmedText}
@@ -211,11 +225,11 @@ ${trimmedText}
 
     const response = await together.chat.completions.create({
       model: MODEL,
-      temperature: 0.70, // Ideal sweet spot for creative variety without losing coherence
-      top_p: 0.90,
+      temperature: 0.85, // Higher sampling temperature forces unpredictable human word choices
+      top_p: 0.95,
       max_tokens: maxTokens,
-      presence_penalty: 0.1,  // Low penalty ensures smooth, natural language flow
-      frequency_penalty: 0.1, // Prevents repetitive loops without causing choppy grammar
+      presence_penalty: 0.2, // Prevents repetitive sentence openings
+      frequency_penalty: 0.3, // Eliminates robotic word recycling
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
