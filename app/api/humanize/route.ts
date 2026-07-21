@@ -3,8 +3,8 @@ import Together from "together-ai";
 const MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo";
 const MAX_TEXT_LENGTH = 12_000;
 
-// High-risk AI words that trigger detectors
-const BANNED_AI_WORDS = [
+// High-frequency AI patterns and buzzwords to avoid
+const BANNED_AI_PHRASES = [
   "delve",
   "tapestry",
   "testament",
@@ -28,29 +28,27 @@ const BANNED_AI_WORDS = [
   "profound",
   "unparalleled",
   "increasingly",
-  "highlighting",
-  "emphasizing",
-  "subsequently",
-  "comprehensive",
+  "in today's fast-paced world",
+  "it is important to note",
 ];
 
 const MODE_INSTRUCTIONS: Record<string, string> = {
-  Free: "Make light improvements to flow and naturalness while keeping the sentence structure close to the original.",
-  Standard: "Rewrite thoroughly using natural phrasing, organic sentence variety, and conversational flow.",
-  Academic: "Rewrite in clear, formal academic prose without robotic filler or generic topic openings.",
-  Simple: "Use clear, plain language and simple sentences while keeping every core detail.",
-  Professional: "Use direct, professional language that sounds natural and written by an experienced human.",
-  Creative: "Use engaging, vivid language while preserving all original facts.",
+  Free: "Lightly polish the phrasing for natural flow while staying very close to the original text.",
+  Standard: "Completely rephrase the text into smooth, authentic human prose while preserving every detail.",
+  Academic: "Rewrite in clear, precise academic language without robotic filler or formulaic transitions.",
+  Simple: "Use simple, direct language and clear sentence structures while keeping all core facts.",
+  Professional: "Use direct, polished, professional tone suitable for workplace communications.",
+  Creative: "Use vivid, engaging phrasing while maintaining strict accuracy to the source content.",
 };
 
 const TONE_INSTRUCTIONS: Record<string, string> = {
-  Natural: "Relaxed, authentic, and completely unscripted.",
+  Natural: "Conversational, articulate, and completely unscripted.",
   Formal: "Structured, clear, and professional.",
-  Friendly: "Warm, conversational, and direct.",
-  Professional: "Polished and business-appropriate.",
-  Academic: "Analytical and precise.",
-  Confident: "Direct and assertive.",
-  Simple: "Plain and clear.",
+  Friendly: "Warm, accessible, and direct.",
+  Professional: "Business-ready, clear, and effective.",
+  Academic: "Analytical, formal, and objective.",
+  Confident: "Direct, assertive, and articulate.",
+  Simple: "Plain, accessible, and concise.",
 };
 
 function resolveMode(mode: string): { name: string; instruction: string } {
@@ -71,8 +69,11 @@ function countWords(text: string): number {
 
 function cleanOutput(text: string): string {
   let cleaned = text.trim();
+  
+  // Remove accidental markdown fences
   cleaned = cleaned.replace(/^```(?:\w+)?\s*\n?/, "").replace(/\n?```$/, "").trim();
 
+  // Strip conversational introductory prefixes
   const prefixes = [
     /^Here is the rewritten text:\s*/i,
     /^Rewritten version:\s*/i,
@@ -88,18 +89,15 @@ function cleanOutput(text: string): string {
   return cleaned.trim();
 }
 
-function postProcessHumanize(text: string): string {
+function postProcess(text: string): string {
   let cleaned = text.replace(/\r\n/g, "\n");
-  cleaned = cleaned.replace(/!{2,}/g, ".");
-  cleaned = cleaned.replace(/\.{2,}/g, ".");
   cleaned = cleaned.replace(/[^\S\n]{2,}/g, " ");
 
-  // Post-replacement for common AI transitions
+  // Gentle replacements for remaining generic AI transition phrases
   cleaned = cleaned
     .replace(/\bin today's fast-paced world\b/gi, "these days")
     .replace(/\ba profound impact\b/gi, "a real effect")
     .replace(/\bplays a crucial role in\b/gi, "helps with")
-    .replace(/\bmake a big difference\b/gi, "help quite a bit")
     .replace(/\bfurthermore\b/gi, "also")
     .replace(/\bmoreover\b/gi, "on top of that");
 
@@ -111,77 +109,30 @@ function buildSystemPrompt(
   modeInstruction: string,
   toneName: string,
   toneInstruction: string,
-  inputWordCount: number,
+  targetWordCount: number,
+  paragraphCount: number,
 ): string {
-  const minWords = Math.max(15, Math.round(inputWordCount * 0.90));
-  const maxWords = Math.round(inputWordCount * 1.10);
+  return `You are an expert editor rewriting text so that it reads like genuine, high-quality human writing.
 
-  return `You are a professional human editor re-writing content to bypass stealth AI detectors (GPTZero, Turnitin, CopyLeaks).
+PRIMARY OBJECTIVES:
+1. PRESERVE LENGTH & DETAIL:
+   - Target word count: ~${targetWordCount} words. Keep the output length within 90% to 110% of the target.
+   - Maintain approximately ${paragraphCount} paragraph(s).
+   - Retain every single fact, concept, detail, and nuance from the original text. Do not summarize or cut information.
 
-CRITICAL LENGTH & FACT RULES:
-- Target length: ~${inputWordCount} words (strict range: ${minWords} to ${maxWords} words).
-- Retain EVERY fact, technical term, definition, and argument. Never summarize or omit information.
+2. HUMAN STYLE & RHYTHM:
+   - Write in complete, articulate, smooth sentences.
+   - Vary sentence structures naturally: mix longer explanatory sentences with concise points.
+   - Avoid generic robotic introductions or formulaic topic statements (e.g., "X is an important concept that...").
+   - Do NOT force weird formatting like excessive semicolons, abrupt fragments, or constant em-dashes. Write fluent, cohesive paragraphs.
 
-EXTREME HUMANIZATION INSTRUCTIONS (FOR HIGH PERPLEXITY & BURSTINESS):
-1. AGGRESSIVE SENTENCE VARIATION:
-   - Alternating sentence rhythm is MANDATORY. Place a short punchy sentence (3–6 words) right next to a long, complex clause (22–32 words).
-   - Use em-dashes (—), semicolons, or parenthetical remarks inside longer sentences to break robotic flow.
-
-2. FORBIDDEN OPENINGS & PATTERNS:
-   - NEVER start sentences with standard AI transitions: "Additionally", "Furthermore", "Moreover", "In conclusion", "As a result", "By doing so".
-   - NEVER open paragraphs with generic topic statements like "X plays a critical role...", "Y is an important concept...", or "In today's world...".
-   - Start paragraphs directly in active context, conditional clauses ("When...", "If..."), or situational examples.
-
-3. VOCABULARY RESTRICTIONS:
-   - Strictly avoid: ${BANNED_AI_WORDS.slice(0, 15).join(", ")}.
-   - Write like a real person using grounded, direct language.
+3. FORBIDDEN WORDS & PHRASES:
+   - Avoid using these overused AI buzzwords: ${BANNED_AI_PHRASES.slice(0, 15).join(", ")}.
 
 MODE: ${modeName} (${modeInstruction})
 TONE: ${toneName} (${toneInstruction})
 
-Output ONLY the final humanized text. Do not include intros, quote marks, or commentary.`;
-}
-
-async function humanizeChunk(
-  together: Together,
-  chunk: string,
-  modeName: string,
-  modeInstruction: string,
-  toneName: string,
-  toneInstruction: string,
-): Promise<string> {
-  const wordCount = countWords(chunk);
-  const maxTokens = Math.min(2500, Math.max(300, Math.ceil(wordCount * 2.2)));
-
-  const systemPrompt = buildSystemPrompt(
-    modeName,
-    modeInstruction,
-    toneName,
-    toneInstruction,
-    wordCount
-  );
-
-  const userMessage = `Rewrite this section to read like genuine human writing. Preserve every fact and detail:
-
-<SOURCE_TEXT>
-${chunk}
-</SOURCE_TEXT>`;
-
-  const response = await together.chat.completions.create({
-    model: MODEL,
-    temperature: 0.82, // Higher temperature for greater unpredictability
-    top_p: 0.92,
-    max_tokens: maxTokens,
-    presence_penalty: 0.45,
-    frequency_penalty: 0.5,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userMessage },
-    ],
-  });
-
-  const rawChoice = response.choices?.[0]?.message?.content || "";
-  return postProcessHumanize(cleanOutput(rawChoice));
+Output strictly the rewritten body text. No greetings, headers, intro notes, or code blocks.`;
 }
 
 export async function POST(req: Request) {
@@ -236,40 +187,44 @@ export async function POST(req: Request) {
     const resolvedTone = resolveTone(typeof tone === "string" ? tone.trim() : "Natural");
     const together = new Together({ apiKey });
 
-    // SPLIT LONG TEXTS BY PARAGRAPHS TO PREVENT AI PATTERN DECAY
-    const paragraphs = trimmedText
-      .split(/\n\s*\n/)
-      .map((p) => p.trim())
-      .filter(Boolean);
+    const wordCount = countWords(trimmedText);
+    const paragraphs = trimmedText.split(/\n\s*\n/).filter(Boolean);
+    const paragraphCount = Math.max(1, paragraphs.length);
 
-    let rewrittenParagraphs: string[] = [];
+    // Calculate max tokens with a healthy safety margin so output is never truncated
+    const maxTokens = Math.min(4000, Math.max(600, Math.ceil(wordCount * 2.5)));
 
-    // If text has multiple paragraphs and total words > 150, process paragraph by paragraph
-    if (paragraphs.length > 1 && countWords(trimmedText) > 150) {
-      for (const paragraph of paragraphs) {
-        const rewritten = await humanizeChunk(
-          together,
-          paragraph,
-          resolvedMode.name,
-          resolvedMode.instruction,
-          resolvedTone.name,
-          resolvedTone.instruction
-        );
-        rewrittenParagraphs.push(rewritten);
-      }
-    } else {
-      const rewritten = await humanizeChunk(
-        together,
-        trimmedText,
-        resolvedMode.name,
-        resolvedMode.instruction,
-        resolvedTone.name,
-        resolvedTone.instruction
-      );
-      rewrittenParagraphs.push(rewritten);
-    }
+    const systemPrompt = buildSystemPrompt(
+      resolvedMode.name,
+      resolvedMode.instruction,
+      resolvedTone.name,
+      resolvedTone.instruction,
+      wordCount,
+      paragraphCount
+    );
 
-    const finalResult = rewrittenParagraphs.join("\n\n");
+    const userMessage = `Rewrite the following text into smooth, complete, natural human prose. Preserve all information and match the target length (~${wordCount} words):
+
+<SOURCE_TEXT>
+${trimmedText}
+</SOURCE_TEXT>`;
+
+    const response = await together.chat.completions.create({
+      model: MODEL,
+      temperature: 0.70, // Ideal sweet spot for creative variety without losing coherence
+      top_p: 0.90,
+      max_tokens: maxTokens,
+      presence_penalty: 0.1,  // Low penalty ensures smooth, natural language flow
+      frequency_penalty: 0.1, // Prevents repetitive loops without causing choppy grammar
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
+      ],
+    });
+
+    const rawChoice = response.choices?.[0]?.message?.content || "";
+    const cleanedChoice = cleanOutput(rawChoice);
+    const finalResult = postProcess(cleanedChoice);
 
     if (!finalResult) {
       return Response.json(
