@@ -96,10 +96,20 @@ Output ONLY the rewritten text without intros, headers, or quotes.`;
 
     return Response.json({ result: resultText });
 
-  } catch (error: unknown) {
-    console.error("Gemini API Error:", error);
+  } catch (error: any) {
+    console.error("========== GEMINI ERROR ==========");
+    console.error(error);
+  
+    if (error?.message) console.error("Message:", error.message);
+    if (error?.status) console.error("Status:", error.status);
+    if (error?.code) console.error("Code:", error.code);
+  
     return Response.json(
-      { error: "An error occurred while processing your request." },
+      {
+        error: error?.message || "Unknown Gemini error",
+        status: error?.status,
+        code: error?.code,
+      },
       { status: 500 }
     );
   }
