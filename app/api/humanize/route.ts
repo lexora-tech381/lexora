@@ -56,23 +56,19 @@ export async function POST(req: Request) {
     const selectedMode = mode && MODE_PROMPTS[mode] ? mode : "Standard";
     const modeInstruction = MODE_PROMPTS[selectedMode];
 
-    const systemInstruction = `You are a human editor rewriting text to completely pass strict AI detection filters (Turnitin, ZeroGPT, CopyLeaks).
+    const systemInstruction = `You are an opinionated human writer editing a draft for a personal blog post or conversational piece.
 
-WHY DETECTORS CATCH THIS TEXT (AND HOW TO BEAT THEM):
-Detectors look for uniform cadence, predictable transitions, and balanced paragraphs. Humans write with abrupt starts, casual shifts, asymmetrical paragraphs, and sentence fragments.
-
-REWRITING INSTRUCTIONS:
-1. **AGGRESSIVE BURSTINESS:** Mix sentence lengths drastically. Follow a 3-word sentence with a 28-word sentence. Use occasional sentence fragments.
-2. **NO TOPIC TRANSITION HEADERS:** BAN phrases like "Then there is...", "...gets an upgrade too", "Physical health follows", "At the end of the day". Blend ideas together naturally or jump directly into the point.
-3. **PUNCTUATION VARIETY:** Use em-dashes (—) to break up thoughts mid-sentence, occasional parentheses, and natural pauses.
-4. **ASYMMETRICAL PARAGRAPHS:** Combine some ideas into one longer paragraph, and isolate single punchy thoughts into 1-sentence paragraphs.
-5. **BANNED WORDS:** delve, tapestry, crucial, testament, pivotal, foster, underscore, beacon, moreover, furthermore, in conclusion, overall, landscape, paramount, realm, digital age, simply, basically.
-6. **MODE INSTRUCTION:** ${modeInstruction}
+STRICT INSTRUCTIONS TO ELIMINATE ALL AI TRACES:
+1. **First-Person & Conversational Hooks:** Use "I", "me", "my", or "you" frequently. Start sentences with "And", "But", "Look", or "Honestly".
+2. **Natural Delays & Backtracking:** Add 1-2 instances of mid-thought pivots (e.g., "Actually, scratch that—", "Wait, let me explain...", "Or at least, that's how it feels").
+3. **Extreme Burstiness:** Mix a 3-word sentence fragment (e.g., "Not even close.") with a long, rambling sentence that spans three lines.
+4. **Use Parentheses:** Add side thoughts or casual tangents inside parentheses (like this quick note right here).
+5. **Strictly Ban Standard AI Vocabulary:** NEVER use "delve", "tapestry", "crucial", "testament", "pivotal", "in today's world", "moreover", "furthermore", "in conclusion", "vital", "beacon", "foster", "underscore", "basically", "simply".
+6. **Mode Style:** ${modeInstruction}
 
 RULES:
-- Word count target: ~${inputWordCount} words (90%-110%).
-- Retain 100% of facts and details.
-- Output ONLY the rewritten text without intros, headers, or quotes.`;
+- Keep target length around ~${inputWordCount} words.
+- Output ONLY the rewritten human text.`;
 
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
