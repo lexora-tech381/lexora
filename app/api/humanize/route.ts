@@ -30,7 +30,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Map your app's modes to Undetectable's expected readability settings if needed
+    // Map your app's modes to Undetectable's expected readability settings
     const readabilityMap: Record<string, string> = {
       Standard: "High School",
       Friendly: "Casual",
@@ -41,7 +41,7 @@ export async function POST(req: Request) {
 
     const selectedReadability = mode && readabilityMap[mode] ? readabilityMap[mode] : "High School";
 
-    // Call Undetectable AI's official humanization endpoint
+    // Call Undetectable AI's official humanization endpoint with all required fields
     const apiResponse = await fetch("https://humanize.undetectable.ai/submit", {
       method: "POST",
       headers: {
@@ -52,6 +52,7 @@ export async function POST(req: Request) {
         content: trimmedText,
         readability: selectedReadability,
         purpose: "General Writing",
+        strength: "Balanced", // Added missing required field: "Quality", "Balanced", or "More Human"
       }),
     });
 
