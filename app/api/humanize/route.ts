@@ -3,7 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 // Initialize Gemini Client
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-const MODEL_NAME = "gemini-2.5-flash-lite";// Fast and highly responsive model
+const MODEL_NAME = "gemini-2.5-flash"; // Fast, reliable workhorse model
 const MAX_TEXT_LENGTH = 12_000;
 
 // Dynamic System Prompts based on selected Mode
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return Response.json(
-        { error: "Gemini API key is not configured." },
+        { error: "Gemini API key is not configured in environment variables." },
         { status: 500 }
       );
     }
@@ -68,24 +68,28 @@ RULES:
 Output ONLY the rewritten text without intros, headers, or quotes.`;
 
     // Call Gemini API using @google/genai SDK
-const response = await ai.models.generateContent({
-  model: MODEL_NAME,
-  contents: [
-    {
-      role: "user",
-      parts: [{ text: `Humanize the following text:\n\n${trimmedText}` }],
-    },
-  ],
-  config: {
-    systemInstruction: systemInstruction,
-  },
-});
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `Humanize the following text:\n\n${trimmedText}` }],
+        },
+      ],
+      config: {
+        systemInstruction: systemInstruction,
+        // Disable thinking budget to ensure instant direct output without reasoning delays
+        thinkingConfig: {
+          thinkingBudget: 0,
+        },
+      },
+    });
 
     const resultText = response.text?.trim();
 
     if (!resultText) {
       return Response.json(
-        { error: "Failed to generate humanized text." },
+        { error: "Failed to generate humanized text. Please try again." },
         { status: 500 }
       );
     }
