@@ -30,29 +30,30 @@ export async function POST(req: Request) {
       );
     }
 
-    // Map your app's modes to Undetectable's expected readability settings
+    // Map your app's modes to Undetectable's valid readability options:
+    // "High School", "University", "Doctorate", "Journalist", "Marketing"
     const readabilityMap: Record<string, string> = {
       Standard: "High School",
-      Friendly: "Casual",
+      Friendly: "University",
       Academic: "University",
-      Professional: "Professional",
-      Simple: "General Writing",
+      Professional: "Journalist",
+      Simple: "High School",
     };
 
     const selectedReadability = mode && readabilityMap[mode] ? readabilityMap[mode] : "High School";
 
-    // Call Undetectable AI's official humanization endpoint with all required fields
+    // Call Undetectable AI's official humanization endpoint
     const apiResponse = await fetch("https://humanize.undetectable.ai/submit", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "apikey": apiKey,
+        "apikey": apiKey, // Correct header required by Undetectable AI
       },
       body: JSON.stringify({
         content: trimmedText,
         readability: selectedReadability,
-        purpose: "General Writing",
-        strength: "Balanced", // Added missing required field: "Quality", "Balanced", or "More Human"
+        purpose: "General Writing", // Options: "General Writing", "Essay", "Article", etc.
+        strength: "Balanced",      // Options: "Quality", "Balanced", "More Human"
       }),
     });
 
@@ -66,6 +67,8 @@ export async function POST(req: Request) {
     }
 
     const data = await apiResponse.json();
+    
+    // Extract result text based on common API output schemas
     const resultText = data.output || data.result || data.text;
 
     if (!resultText) {
