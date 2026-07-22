@@ -1,13 +1,27 @@
+import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
 
+// Initialize Gemini Client safely using your free tier GEMINI_API_KEY
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const MAX_TEXT_LENGTH = 12_000;
+
+// Dynamic System Prompts tuned for high-entropy phrasing to avoid AI detectors
+const MODE_PROMPTS: Record<string, string> = {
+  Standard: `Rewrite naturally. Mix short blunt statements with long fluid ideas. Use conversational transitions and organic phrasing.`,
+  Friendly: `Rewrite as if chatting with a close friend. Use casual phrasing, contractions, relatable analogies, and a warm, informal rhythm.`,
+  Academic: `Rewrite in clear, human student prose. Avoid mechanical transitions like 'Furthermore' or 'In summary'. Focus on direct argument flow and varied sentence structures.`,
+  Professional: `Rewrite in direct workplace language. Sound like an expert writing a real email or report—clear, candid, and free of corporate fluff.`,
+  Simple: `Rewrite using plain, clear language that anyone can follow while keeping all original details intact.`
+};
 
 export async function POST(req: Request) {
   try {
-    const apiKey = process.env.HUMANIZER_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { error: "Humanizer API key is not configured in environment variables." },
+        { error: "Gemini API key is not configured in environment variables." },
         { status: 500 }
       );
     }
@@ -30,59 +44,48 @@ export async function POST(req: Request) {
       );
     }
 
-    // Map your app's modes to Undetectable's valid readability options:
-    // "High School", "University", "Doctorate", "Journalist", "Marketing"
-    const readabilityMap: Record<string, string> = {
-      Standard: "High School",
-      Friendly: "University",
-      Academic: "University",
-      Professional: "Journalist",
-      Simple: "High School",
-    };
+    const selectedMode = mode && MODE_PROMPTS[mode] ? mode : "Standard";
+    const modeInstruction = MODE_PROMPTS[selectedMode];
 
-    const selectedReadability = mode && readabilityMap[mode] ? readabilityMap[mode] : "High School";
+    const systemInstruction = `You are a professional human editor. Rewrite the provided text to sound completely natural, direct, and well-crafted.
 
-    // Call Undetectable AI's official humanization endpoint
-    const apiResponse = await fetch("https://humanize.undetectable.ai/submit", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "apikey": apiKey, // Correct header required by Undetectable AI
+RULES:
+1. Preserve 100% of the original facts, technical terms, and core meaning.
+2. Mix sentence lengths drastically—combine short punchy statements with longer explanatory sentences to break predictable AI patterns.
+3. Eliminate repetitive corporate/AI buzzwords (e.g., "delve", "tapestry", "crucial", "testament", "pivotal", "in today's world", "foster").
+4. Do NOT add artificial slang, over-dramatic commentary, or forced first-person filler.
+5. Mode Style: ${modeInstruction}
+
+Output ONLY the rewritten text without intros, headers, or quotes.`;
+
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `Rewrite this text to completely humanize it:\n\n${trimmedText}` }],
+        },
+      ],
+      config: {
+        systemInstruction: systemInstruction,
+        temperature: 0.95, // High entropy breaks predictable token sequences
+        topP: 0.95,
       },
-      body: JSON.stringify({
-        content: trimmedText,
-        readability: selectedReadability,
-        purpose: "General Writing", // Options: "General Writing", "Essay", "Article", etc.
-        strength: "Balanced",      // Options: "Quality", "Balanced", "More Human"
-      }),
     });
 
-    if (!apiResponse.ok) {
-      const errorText = await apiResponse.text();
-      console.error("Undetectable API Error:", errorText);
-      return NextResponse.json(
-        { error: "Failed to process text through humanizer service." },
-        { status: 500 }
-      );
-    }
-
-    const data = await apiResponse.json();
-    
-    // Extract result text based on common API output schemas
-    const resultText = data.output || data.result || data.text;
+    const resultText = response.text?.trim();
 
     if (!resultText) {
       return NextResponse.json(
-        { error: "Received empty response from humanizer service." },
+        { error: "Failed to generate humanized text. Please try again." },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ result: resultText.trim() });
+    return NextResponse.json({ result: resultText });
 
   } catch (error: any) {
-    console.error("========== HUMANIZER ROUTE ERROR ==========");
-    console.error(error);
+    console.error("========== GEMINI HUMANIZER ERROR ==========", error);
 
     return NextResponse.json(
       { error: error?.message || "An unexpected error occurred." },
