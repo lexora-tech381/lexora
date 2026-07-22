@@ -3,7 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 // Initialize Gemini Client
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-const MODEL_NAME = "gemini-2.5-flash-lite";
+const MODEL_NAME = "gemini-flash-lite-latest";
 const MAX_TEXT_LENGTH = 12_000;
 
 // Dynamic System Prompts based on selected Mode
