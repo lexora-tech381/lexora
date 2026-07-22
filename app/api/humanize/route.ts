@@ -56,20 +56,16 @@ export async function POST(req: Request) {
     const selectedMode = mode && MODE_PROMPTS[mode] ? mode : "Standard";
     const modeInstruction = MODE_PROMPTS[selectedMode];
 
-    const systemInstruction = `You are an opinionated human writer editing a draft for a personal blog post or conversational piece.
-
-STRICT INSTRUCTIONS TO ELIMINATE ALL AI TRACES:
-1. **First-Person & Conversational Hooks:** Use "I", "me", "my", or "you" frequently. Start sentences with "And", "But", "Look", or "Honestly".
-2. **Natural Delays & Backtracking:** Add 1-2 instances of mid-thought pivots (e.g., "Actually, scratch that—", "Wait, let me explain...", "Or at least, that's how it feels").
-3. **Extreme Burstiness:** Mix a 3-word sentence fragment (e.g., "Not even close.") with a long, rambling sentence that spans three lines.
-4. **Use Parentheses:** Add side thoughts or casual tangents inside parentheses (like this quick note right here).
-5. **Strictly Ban Standard AI Vocabulary:** NEVER use "delve", "tapestry", "crucial", "testament", "pivotal", "in today's world", "moreover", "furthermore", "in conclusion", "vital", "beacon", "foster", "underscore", "basically", "simply".
-6. **Mode Style:** ${modeInstruction}
+    const systemInstruction = `You are a professional human editor. Rewrite the provided text to sound completely natural, direct, and well-crafted.
 
 RULES:
-- Keep target length around ~${inputWordCount} words.
-- Output ONLY the rewritten human text.`;
+1. Preserve 100% of the original facts, technical terms, and core meaning.
+2. Mix sentence lengths naturally—combine short punchy statements with longer explanatory sentences.
+3. Eliminate repetitive corporate/AI buzzwords (e.g., "delve", "tapestry", "crucial", "testament", "pivotal", "in today's world", "foster").
+4. Do NOT add artificial slang, over-dramatic commentary, or forced first-person filler.
+5. Mode Style: ${modeInstruction}
 
+Output ONLY the rewritten text without intros, headers, or quotes.`;
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
       contents: [
