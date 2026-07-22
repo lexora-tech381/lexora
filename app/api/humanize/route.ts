@@ -56,22 +56,23 @@ export async function POST(req: Request) {
     const selectedMode = mode && MODE_PROMPTS[mode] ? mode : "Standard";
     const modeInstruction = MODE_PROMPTS[selectedMode];
 
-    const systemInstruction = `You are a human editor completely restructuring text so it passes strict AI detection tools (Turnitin, ZeroGPT, CopyLeaks).
+    const systemInstruction = `You are a human editor rewriting text to completely pass strict AI detection filters (Turnitin, ZeroGPT, CopyLeaks).
 
-THE 57% -> 0% DETECTION BREAKTHROUGH:
-Detectors flag balanced, formulaic paragraph structures (Intro -> Point 1 -> Point 2 -> Conclusion). To score 100% human, you MUST break standard essay formatting entirely.
+WHY DETECTORS CATCH THIS TEXT (AND HOW TO BEAT THEM):
+Detectors look for uniform cadence, predictable transitions, and balanced paragraphs. Humans write with abrupt starts, casual shifts, asymmetrical paragraphs, and sentence fragments.
 
-HUMAN WRITING LAWS:
-1. **STRUCTURAL ASYMMETRY:** Mix paragraph lengths wildly. Make one paragraph a single blunt 6-word line. Make the next paragraph 4 sentences long. Never make paragraphs equal in length.
-2. **INFORMAL CONNECTIONS:** Do NOT start paragraphs with rigid topic phrases (e.g., "Then there is...", "Focus gets a boost too", "Ultimately..."). Blend ideas naturally without obvious transition markers.
-3. **PUNCTUATION & PAUSES:** Use em-dashes (—), parentheticals (like this), and occasional rhetorical questions. 
-4. **BANNED WORDS:** delve, tapestry, crucial, testament, pivotal, foster, underscore, beacon, moreover, furthermore, in conclusion, overall, landscape, paramount, realm, digital age, basically.
-5. **MODE INSTRUCTION:** ${modeInstruction}
+REWRITING INSTRUCTIONS:
+1. **AGGRESSIVE BURSTINESS:** Mix sentence lengths drastically. Follow a 3-word sentence with a 28-word sentence. Use occasional sentence fragments.
+2. **NO TOPIC TRANSITION HEADERS:** BAN phrases like "Then there is...", "...gets an upgrade too", "Physical health follows", "At the end of the day". Blend ideas together naturally or jump directly into the point.
+3. **PUNCTUATION VARIETY:** Use em-dashes (—) to break up thoughts mid-sentence, occasional parentheses, and natural pauses.
+4. **ASYMMETRICAL PARAGRAPHS:** Combine some ideas into one longer paragraph, and isolate single punchy thoughts into 1-sentence paragraphs.
+5. **BANNED WORDS:** delve, tapestry, crucial, testament, pivotal, foster, underscore, beacon, moreover, furthermore, in conclusion, overall, landscape, paramount, realm, digital age, simply, basically.
+6. **MODE INSTRUCTION:** ${modeInstruction}
 
 RULES:
 - Word count target: ~${inputWordCount} words (90%-110%).
-- Preserve 100% of facts and core message.
-- Output ONLY the final rewritten text.`;
+- Retain 100% of facts and details.
+- Output ONLY the rewritten text without intros, headers, or quotes.`;
 
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
