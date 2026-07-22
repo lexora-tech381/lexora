@@ -3,7 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 // Initialize Gemini Client
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-const MODEL_NAME = process.env.GEMINI_MODEL!;
+const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const MAX_TEXT_LENGTH = 12_000;
 
 // Dynamic System Prompts based on selected Mode
@@ -73,19 +73,13 @@ Output ONLY the rewritten text without intros, headers, or quotes.`;
       contents: [
         {
           role: "user",
-          parts: [
-            {
-              text: `${systemInstruction}
-    
-    Humanize the following text while preserving all information exactly.
-    
-    ${trimmedText}`,
-            },
-          ],
+          parts: [{ text: `Humanize the following text:\n\n${trimmedText}` }],
         },
       ],
+      config: {
+        systemInstruction: systemInstruction,
+      },
     });
-    
 
     const resultText = response.text?.trim();
 
