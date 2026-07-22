@@ -8,15 +8,15 @@ const MAX_TEXT_LENGTH = 12_000;
 
 // Dynamic System Prompts based on selected Mode
 const MODE_PROMPTS: Record<string, string> = {
-  Standard: `Rewrite the text to sound naturally human. Vary sentence lengths, use organic conversational flow, avoid over-polished corporate buzzwords, and preserve every original detail.`,
+  Standard: `Rewrite naturally. Mix short blunt statements with long fluid ideas. Use conversational transitions and organic phrasing.`,
   
-  Friendly: `Rewrite the text as if you are casually explaining it to a friend. Use a warm tone, natural contractions, and straightforward everyday language while keeping all facts intact.`,
+  Friendly: `Rewrite as if chatting with a close friend. Use casual phrasing, contractions, relatable analogies, and a warm, informal rhythm.`,
   
-  Academic: `Rewrite the text in clear student-level academic prose. Avoid robotic generic transitions (e.g., "Furthermore", "In conclusion", "Crucial") and write with varied, natural sentence structures.`,
+  Academic: `Rewrite in clear, human student prose. Avoid mechanical transitions like 'Furthermore' or 'In summary'. Focus on direct argument flow and varied sentence structures.`,
   
-  Professional: `Rewrite the text in direct, clear workplace language. Keep it polished yet conversational, sounding like an experienced professional rather than an AI assistant.`,
+  Professional: `Rewrite in direct workplace language. Sound like an expert writing a real email or report—clear, candid, and free of corporate fluff.`,
   
-  Simple: `Rewrite using simple, plain language with clear sentence structures while preserving all core facts and details.`
+  Simple: `Rewrite using plain, clear language that anyone can follow while keeping all original details intact.`
 };
 
 function countWords(text: string): number {
@@ -56,31 +56,39 @@ export async function POST(req: Request) {
     const selectedMode = mode && MODE_PROMPTS[mode] ? mode : "Standard";
     const modeInstruction = MODE_PROMPTS[selectedMode];
 
-    // Build advanced anti-detection system prompt for Gemini
-    const systemInstruction = `You are a human writer with an expressive, varied writing style. Rewrite the text so it easily passes strict AI detection filters (Turnitin, CopyLeaks, ZeroGPT) while keeping 100% of the original meaning and details intact.
+    const systemInstruction = `You are a human writer rewriting text to pass strict AI detection algorithms (Turnitin, ZeroGPT, CopyLeaks).
 
-CRITICAL WRITING TECHNIQUE (BURSTINESS & PERPLEXITY):
-1. **Sentence Variety (Burstiness):** Mix sentence lengths drastically. Follow a short 4-word punchy sentence with a long, multi-clause explanatory sentence. Use rare or unexpected sentence structures.
-2. **Vocabulary & Tone (Perplexity):** Use human-like conversational transitions. Avoid standard AI bridge words completely.
-3. **Strictly Ban AI Buzzwords:** NEVER use "delve", "tapestry", "crucial", "testament", "pivotal", "in today's digital landscape", "furthermore", "moreover", "in conclusion", "vital", "beacon", "foster", "underscore".
-4. **Natural Flaws:** Use natural contractions (don't, it's, couldn't) and varied phrasing that reads like an educated human draft.
-5. **Mode Style:** ${modeInstruction}
+WHY AI DETECTORS TRIGGER (AND HOW YOU WILL BEAT THEM):
+Detectors check for predictable word choices (perplexity) and uniform sentence structures (burstiness). Standard AI always uses smooth, balanced, uniform sentences and formal connective phrases. Humans do NOT write like that.
+
+REWRITING LAWS:
+1. **EXTREME SENTENCE CONTRAST:** Follow a tiny 2-to-5 word sentence with a complex 25-word sentence. Break up predictable cadence continuously.
+2. **USE HUMAN STRUCTURAL MARKS:** Throw in em-dashes (—), occasional parentheses, and natural pauses. 
+3. **NO PARALLEL THREE-ITEM LISTS:** Never write "x, y, and z" repeatedly.
+4. **BANNED WORDS (DO NOT USE):** delve, tapestry, crucial, testament, pivotal, foster, underscore, beacon, moreover, furthermore, in conclusion, overall, landscape, paramount, realm, digital age.
+5. **MODE OVERRIDE:** ${modeInstruction}
+
+EXAMPLE OF THE TARGET TRANSFORMATION:
+AI Version: "Meditation is a beneficial habit that reduces stress, enhances focus, and improves sleep quality in daily life."
+Human Version: "Stress wrecks everything—your sleep, focus, energy. Practicing meditation every evening actually gives your brain a chance to reset. It doesn't take hours either; even five minutes makes a real difference."
 
 RULES:
-- Target length: ~${inputWordCount} words (Keep within 90%–110% of original).
-- Output ONLY the final humanized text. Do NOT add intros, titles, explanations, or quotes.`;
+- Word count target: ~${inputWordCount} words (90%-110%).
+- Keep 100% of facts and meaning.
+- Output ONLY the rewritten text without intros, explanations, or quotes.`;
 
-    // Call Gemini API using @google/genai SDK
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
       contents: [
         {
           role: "user",
-          parts: [{ text: `Humanize the following text:\n\n${trimmedText}` }],
+          parts: [{ text: `Rewrite this text to completely humanize it:\n\n${trimmedText}` }],
         },
       ],
       config: {
         systemInstruction: systemInstruction,
+        temperature: 0.95, // High entropy breaks predictable token sequences
+        topP: 0.95,
       },
     });
 
@@ -98,11 +106,7 @@ RULES:
   } catch (error: any) {
     console.error("========== GEMINI ERROR ==========");
     console.error(error);
-  
-    if (error?.message) console.error("Message:", error.message);
-    if (error?.status) console.error("Status:", error.status);
-    if (error?.code) console.error("Code:", error.code);
-  
+
     return Response.json(
       {
         error: error?.message || "Unknown Gemini error",
