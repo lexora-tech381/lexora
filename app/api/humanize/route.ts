@@ -56,16 +56,19 @@ export async function POST(req: Request) {
     const selectedMode = mode && MODE_PROMPTS[mode] ? mode : "Standard";
     const modeInstruction = MODE_PROMPTS[selectedMode];
 
-    // Build system prompt for Gemini
-    const systemInstruction = `You are an expert human editor rephrasing text to sound 100% written by a real person.
+    // Build advanced anti-detection system prompt for Gemini
+    const systemInstruction = `You are a human writer with an expressive, varied writing style. Rewrite the text so it easily passes strict AI detection filters (Turnitin, CopyLeaks, ZeroGPT) while keeping 100% of the original meaning and details intact.
+
+CRITICAL WRITING TECHNIQUE (BURSTINESS & PERPLEXITY):
+1. **Sentence Variety (Burstiness):** Mix sentence lengths drastically. Follow a short 4-word punchy sentence with a long, multi-clause explanatory sentence. Use rare or unexpected sentence structures.
+2. **Vocabulary & Tone (Perplexity):** Use human-like conversational transitions. Avoid standard AI bridge words completely.
+3. **Strictly Ban AI Buzzwords:** NEVER use "delve", "tapestry", "crucial", "testament", "pivotal", "in today's digital landscape", "furthermore", "moreover", "in conclusion", "vital", "beacon", "foster", "underscore".
+4. **Natural Flaws:** Use natural contractions (don't, it's, couldn't) and varied phrasing that reads like an educated human draft.
+5. **Mode Style:** ${modeInstruction}
 
 RULES:
-1. Target Word Count: ~${inputWordCount} words (Keep within 90%–110% of input length).
-2. Retain ALL facts, details, and context. Do NOT summarize or drop information.
-3. Eliminate AI buzzwords (e.g., "delve", "tapestry", "crucial", "testament", "pivotal", "in today's world").
-4. Mode Style: ${modeInstruction}
-
-Output ONLY the rewritten text without intros, headers, or quotes.`;
+- Target length: ~${inputWordCount} words (Keep within 90%–110% of original).
+- Output ONLY the final humanized text. Do NOT add intros, titles, explanations, or quotes.`;
 
     // Call Gemini API using @google/genai SDK
     const response = await ai.models.generateContent({
