@@ -1,13 +1,16 @@
+import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
 
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const MAX_TEXT_LENGTH = 12_000;
 
 export async function POST(req: Request) {
   try {
-    const apiKey = process.env.BYPASS_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { error: "Bypass API key is not configured in environment variables." },
+        { error: "Gemini API key is not configured in environment variables." },
         { status: 500 }
       );
     }
@@ -30,69 +33,44 @@ export async function POST(req: Request) {
       );
     }
 
-    // Step 1: Create a generation task with BypassGPT API
-    const generateRes = await fetch("https://www.bypassgpt.ai/api/bypassgpt/v1/generate", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
+    const systemInstruction = `You are an expert human writer and editor. Your job is to rewrite the given text so it reads naturally, completely removing predictable machine patterns while keeping the exact meaning.
+
+Guidelines for rewriting:
+1. Vary sentence length significantly—mix very short sentences with longer, conversational ones.
+2. Avoid uniform phrasing, robotic transitions (like "furthermore", "moreover", "in conclusion"), and overly dramatic buzzwords.
+3. Keep the tone professional, clear, and authentically human.
+4. Preserve all original facts, names, and core information precisely.
+
+Output ONLY the final rewritten text with no introductions, notes, or markdown wrappers.`;
+
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `Rewrite this text to sound naturally human:\n\n${trimmedText}` }],
+        },
+      ],
+      config: {
+        systemInstruction: systemInstruction,
+        temperature: 1.0,
+        topP: 0.95,
       },
-      body: JSON.stringify({
-        text: trimmedText,
-        mode: mode || "enhanced",
-      }),
     });
 
-    if (!generateRes.ok) {
-      const errData = await generateRes.json().catch(() => ({}));
-      throw new Error(errData.message || "Failed to initiate generation task with BypassGPT.");
-    }
-
-    const generateData = await generateRes.json();
-    const taskId = generateData.task_id || generateData.id;
-
-    if (!taskId) {
-      throw new Error("Did not receive a valid task ID from the provider.");
-    }
-
-    // Step 2: Poll/Retrieve the completed text result (with a short timeout safety net)
-    let resultText = "";
-    let attempts = 0;
-    const maxAttempts = 10;
-
-    while (attempts < maxAttempts) {
-      // Wait 2 seconds between checks
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      attempts++;
-
-      const retrievalRes = await fetch(`https://www.bypassgpt.ai/api/bypassgpt/v1/retrieval?task_id=${taskId}`, {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-        },
-      });
-
-      if (retrievalRes.ok) {
-        const retrievalData = await retrievalRes.json();
-        // Check if processing is complete
-        if (retrievalData.status === "completed" || retrievalData.result || retrievalData.output) {
-          resultText = retrievalData.result || retrievalData.output || retrievalData.text;
-          break;
-        }
-      }
-    }
+    const resultText = response.text?.trim();
 
     if (!resultText) {
       return NextResponse.json(
-        { error: "Task processing timed out or failed to return text." },
+        { error: "Failed to generate text." },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ result: resultText.trim() });
+    return NextResponse.json({ result: resultText });
 
   } catch (error: any) {
-    console.error("========== BYPASS API ERROR ==========", error);
+    console.error("========== HUMANIZER ERROR ==========", error);
     return NextResponse.json(
       { error: error?.message || "An unexpected error occurred." },
       { status: 500 }
