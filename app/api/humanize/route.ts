@@ -30,7 +30,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Official BypassGPT API base server and generate endpoint
+    // Step 1: Send request to BypassGPT generate endpoint with exact field structure
     const generateRes = await fetch("https://www.bypassgpt.ai/api/bypassgpt/v1/generate", {
       method: "POST",
       headers: {
@@ -38,24 +38,24 @@ export async function POST(req: Request) {
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        text: trimmedText,
-        mode: mode || "enhanced", // Forces the deeper rewriting mode
+        content: trimmedText, // Official API expects 'content'
+        mode: mode || "enhanced",
       }),
     });
 
     if (!generateRes.ok) {
       const errData = await generateRes.json().catch(() => ({}));
-      throw new Error(errData.message || "Failed to initiate generation task with BypassGPT.");
+      throw new Error(errData.message || errData.error || "Failed to initiate generation task with BypassGPT.");
     }
 
     const generateData = await generateRes.json();
-    const taskId = generateData.task_id || generateData.id;
+    const taskId = generateData.task_id || generateData.id || generateData.data?.task_id;
 
     if (!taskId) {
       throw new Error("Did not receive a valid task ID from the provider.");
     }
 
-    // Poll the official retrieval endpoint to pull the fully humanized text
+    // Step 2: Poll retrieval endpoint for finished output
     let resultText = "";
     let attempts = 0;
     const maxAttempts = 12;
@@ -73,8 +73,11 @@ export async function POST(req: Request) {
 
       if (retrievalRes.ok) {
         const retrievalData = await retrievalRes.json();
-        if (retrievalData.status === "completed" || retrievalData.result || retrievalData.output || retrievalData.text) {
-          resultText = retrievalData.result || retrievalData.output || retrievalData.text;
+        const status = retrievalData.status || retrievalData.data?.status;
+        const output = retrievalData.result || retrievalData.output || retrievalData.text || retrievalData.data?.result || retrievalData.data?.output;
+
+        if (status === "completed" || output) {
+          resultText = output;
           break;
         }
       }
