@@ -37,26 +37,24 @@ export async function POST(req: Request) {
         ? "simple"
         : "natural";
 
-        const prompt = `
-        You are an expert editor.
-        
-        Rewrite the following text so it reads like it was freshly written by a skilled human writer.
-        
-        Requirements:
-        - Preserve the original meaning and all important facts.
-        - Rewrite every sentence naturally instead of making only small word substitutions.
-        - Vary sentence openings and sentence lengths.
-        - Improve flow and transitions between ideas.
-        - Replace repetitive vocabulary with natural alternatives.
-        - Avoid copying phrases unless they are necessary.
-        - Keep approximately the same overall length.
-        - Use a ${tone} tone.
-        - Return only the rewritten text.
-        
-        Text:
-        
-        ${text}
-        `;
+    const prompt = `You are an expert editor.
+
+Rewrite the following text substantially so it reads like a skilled human writer started over and wrote it from scratch.
+
+Requirements:
+- Preserve the original meaning and all important facts.
+- Rewrite every sentence naturally. Do not make only minor word substitutions.
+- Use different sentence structures and varied openings.
+- Replace repetitive vocabulary with natural alternatives.
+- Improve transitions and flow between sentences and paragraphs.
+- Keep approximately the same overall length.
+- If the text includes a title, rewrite the title too when a more natural alternative exists.
+- Use a ${tone} tone.
+- Return only the rewritten text. No introductions, notes, or commentary.
+
+Text:
+
+${text}`;
 
         const response = await ai.models.generateContent({
           model: MODEL,
