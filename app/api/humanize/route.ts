@@ -37,25 +37,35 @@ export async function POST(req: Request) {
         ? "simple"
         : "natural";
 
-    const prompt = `
-Rewrite the following text to improve readability, clarity, grammar, and overall flow.
+        const prompt = `
+        You are an expert editor.
+        
+        Rewrite the following text so it reads like it was freshly written by a skilled human writer.
+        
+        Requirements:
+        - Preserve the original meaning and all important facts.
+        - Rewrite every sentence naturally instead of making only small word substitutions.
+        - Vary sentence openings and sentence lengths.
+        - Improve flow and transitions between ideas.
+        - Replace repetitive vocabulary with natural alternatives.
+        - Avoid copying phrases unless they are necessary.
+        - Keep approximately the same overall length.
+        - Use a ${tone} tone.
+        - Return only the rewritten text.
+        
+        Text:
+        
+        ${text}
+        `;
 
-Requirements:
-- Preserve the original meaning.
-- Do not invent facts.
-- Keep approximately the same length.
-- Use a ${tone} tone.
-- Return only the rewritten text.
-
-Text:
-
-${text}
-`;
-
-    const response = await ai.models.generateContent({
-      model: MODEL,
-      contents: prompt,
-    });
+        const response = await ai.models.generateContent({
+          model: MODEL,
+          contents: prompt,
+          config: {
+            temperature: 0.9,
+            topP: 0.95,
+          },
+        });
 
     const result = response.text;
 
