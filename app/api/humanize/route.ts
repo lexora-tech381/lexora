@@ -30,7 +30,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Step 1: Send request to BypassGPT generate endpoint with exact field structure
+    // Step 1: Initiate generation task using official server path
     const generateRes = await fetch("https://www.bypassgpt.ai/api/bypassgpt/v1/generate", {
       method: "POST",
       headers: {
@@ -38,14 +38,20 @@ export async function POST(req: Request) {
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        content: trimmedText, // Official API expects 'content'
+        text: trimmedText,
         mode: mode || "enhanced",
       }),
     });
 
     if (!generateRes.ok) {
-      const errData = await generateRes.json().catch(() => ({}));
-      throw new Error(errData.message || errData.error || "Failed to initiate generation task with BypassGPT.");
+      const errText = await generateRes.text();
+      let errData;
+      try {
+        errData = JSON.parse(errText);
+      } catch {
+        errData = { message: errText };
+      }
+      throw new Error(errData.message || errData.error || `API error: ${generateRes.status}`);
     }
 
     const generateData = await generateRes.json();
@@ -55,10 +61,10 @@ export async function POST(req: Request) {
       throw new Error("Did not receive a valid task ID from the provider.");
     }
 
-    // Step 2: Poll retrieval endpoint for finished output
+    // Step 2: Poll retrieval endpoint for the completed result
     let resultText = "";
     let attempts = 0;
-    const maxAttempts = 12;
+    const maxAttempts = 15;
 
     while (attempts < maxAttempts) {
       await new Promise((resolve) => setTimeout(resolve, 2500));
