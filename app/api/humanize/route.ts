@@ -47,33 +47,63 @@ export async function POST(req: Request) {
     const selectedMode = mode && MODE_PROMPTS[mode] ? mode : "Standard";
     const modeInstruction = MODE_PROMPTS[selectedMode];
 
-    const systemInstruction = `You are a professional human editor. Rewrite the provided text to sound completely natural, direct, and well-crafted.
-
+    // ==========================================
+    // PASS 1: Structural Chaos & Burstiness Pass
+    // ==========================================
+    const pass1SystemInstruction = `You are an aggressive structural editor. Your job is to completely rewrite the text to destroy standard AI patterns.
+    
 RULES:
-1. Preserve 100% of the original facts, technical terms, and core meaning.
-2. Mix sentence lengths drastically—combine short punchy statements with longer explanatory sentences to break predictable AI patterns.
-3. Eliminate repetitive corporate/AI buzzwords (e.g., "delve", "tapestry", "crucial", "testament", "pivotal", "in today's world", "foster").
-4. Do NOT add artificial slang, over-dramatic commentary, or forced first-person filler.
-5. Mode Style: ${modeInstruction}
+1. Drastically vary sentence lengths. Mix tiny 3-word sentences with sweeping, compound thoughts to maximize "burstiness".
+2. Change active/passive voices unpredictably.
+3. Completely eliminate AI buzzwords: "delve", "tapestry", "crucial", "testament", "pivotal", "in today's world", "foster", "moreover", "furthermore".
+4. Mode Style: ${modeInstruction}
 
-Output ONLY the rewritten text without intros, headers, or quotes.`;
+Output ONLY the structurally transformed text.`;
 
-    const response = await ai.models.generateContent({
+    const pass1Response = await ai.models.generateContent({
       model: MODEL_NAME,
       contents: [
         {
           role: "user",
-          parts: [{ text: `Rewrite this text to completely humanize it:\n\n${trimmedText}` }],
+          parts: [{ text: `Deconstruct and rewrite this text layout:\n\n${trimmedText}` }],
         },
       ],
       config: {
-        systemInstruction: systemInstruction,
-        temperature: 0.95, // High entropy breaks predictable token sequences
+        systemInstruction: pass1SystemInstruction,
+        temperature: 1.0, // Maximum randomness for sentence shaping
         topP: 0.95,
       },
     });
 
-    const resultText = response.text?.trim();
+    const intermediateText = pass1Response.text?.trim() || trimmedText;
+
+    // ==========================================
+    // PASS 2: Human Flow & Tone Refinement Pass
+    // ==========================================
+    const pass2SystemInstruction = `You are a human copyeditor smoothing out a rough draft. 
+    
+RULES:
+1. Ensure 100% of the original facts, figures, and technical terms remain entirely intact.
+2. Make the flow sound like it was written organically by a real person on a keyboard.
+3. Remove any weird artifacts or clunky phrasing left over from the structural rewrite.
+4. Output ONLY the final humanized text without any conversational filler, intros, quotes, or headers.`;
+
+    const pass2Response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `Polish this draft into natural human prose:\n\n${intermediateText}` }],
+        },
+      ],
+      config: {
+        systemInstruction: pass2SystemInstruction,
+        temperature: 0.85, // Balanced readability control
+        topP: 0.9,
+      },
+    });
+
+    const resultText = pass2Response.text?.trim();
 
     if (!resultText) {
       return NextResponse.json(
