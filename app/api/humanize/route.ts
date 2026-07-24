@@ -30,8 +30,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // Step 1: Call BypassGPT generation endpoint
-    const generateRes = await fetch("https://www.bypassgpt.ai/api/v1/generate", {
+    // Official BypassGPT API base server and generate endpoint
+    const generateRes = await fetch("https://www.bypassgpt.ai/api/bypassgpt/v1/generate", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         text: trimmedText,
-        mode: mode || "enhanced",
+        mode: mode || "enhanced", // Forces the deeper rewriting mode
       }),
     });
 
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
       throw new Error("Did not receive a valid task ID from the provider.");
     }
 
-    // Step 2: Retrieve the completed text result using the task ID
+    // Poll the official retrieval endpoint to pull the fully humanized text
     let resultText = "";
     let attempts = 0;
     const maxAttempts = 12;
@@ -64,7 +64,7 @@ export async function POST(req: Request) {
       await new Promise((resolve) => setTimeout(resolve, 2500));
       attempts++;
 
-      const retrievalRes = await fetch(`https://www.bypassgpt.ai/api/v1/retrieval?task_id=${taskId}`, {
+      const retrievalRes = await fetch(`https://www.bypassgpt.ai/api/bypassgpt/v1/retrieval?task_id=${taskId}`, {
         method: "GET",
         headers: {
           "Authorization": `Bearer ${apiKey}`,
