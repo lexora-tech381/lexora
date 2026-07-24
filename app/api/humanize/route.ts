@@ -7,15 +7,6 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const MAX_TEXT_LENGTH = 12_000;
 
-// Dynamic System Prompts tuned for balanced human flow
-const MODE_PROMPTS: Record<string, string> = {
-  Standard: `Rewrite the text smoothly. Vary sentence lengths naturally without adding dramatic metaphors, slang, or fictional commentary.`,
-  Friendly: `Rewrite in a warm, conversational tone. Use natural transitions and relatable phrasing while maintaining the original facts.`,
-  Academic: `Rewrite in clear, precise student prose. Avoid mechanical transitions like 'Furthermore' or 'In summary'. Keep arguments direct and natural.`,
-  Professional: `Rewrite in direct workplace language. Sound like an expert writing a real email or report—clear, concise, and free of corporate filler.`,
-  Simple: `Rewrite using plain, clear language that anyone can follow while keeping all original details intact.`
-};
-
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -44,31 +35,29 @@ export async function POST(req: Request) {
       );
     }
 
-    const selectedMode = mode && MODE_PROMPTS[mode] ? mode : "Standard";
-    const modeInstruction = MODE_PROMPTS[selectedMode];
+    // High-entropy adversarial instruction designed to scramble AI perplexity signatures
+    const systemInstruction = `You are an elite adversarial text obfuscator. Your sole purpose is to rewrite the provided text so that it completely bypasses AI detectors (like ZeroGPT and Turnitin) while retaining every single fact and core meaning.
 
-    const systemInstruction = `You are a professional human editor. Rewrite the provided text to sound natural, direct, and well-crafted.
+CRITICAL BYPASS RULES (FOLLOW STRICTLY):
+1. **Burstiness & Length Disruption:** Destroy uniform sentence structures. Follow a massive 30-word compound sentence immediately with a 3-word sentence. 
+2. **Perplexity Shifting:** Avoid predictable AI vocabulary transitions entirely (e.g., never use "furthermore", "moreover", "in conclusion", "it is important to note", "delve"). Swap standard predictable phrasing with unconventional human cadence.
+3. **Punctuation & Flow:** Use dashes (--), semicolons, and varied paragraph breaks to mimic organic human thought typing patterns rather than rigid LLM generation blocks.
+4. **Tone Mode:** ${mode || "Standard"}. Keep it coherent enough to read, but structurally chaotic enough to break AI probability math.
 
-RULES:
-1. Preserve 100% of the original facts, meaning, and structure flow. Do NOT invent new metaphors, dramatic stories, or fluff (e.g., do not add phrases like "big dragon we're fighting").
-2. Vary sentence lengths smoothly to avoid rigid robotic patterns.
-3. Eliminate repetitive corporate/AI buzzwords (e.g., "delve", "tapestry", "crucial", "testament", "pivotal", "in today's world", "foster").
-4. Mode Style: ${modeInstruction}
-
-Output ONLY the rewritten text without intros, headers, or quotes.`;
+Output ONLY the rewritten humanized text with no conversational filler, quotes, or markdown wrappers.`;
 
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
       contents: [
         {
           role: "user",
-          parts: [{ text: `Rewrite this text to sound completely natural and human:\n\n${trimmedText}` }],
+          parts: [{ text: `Obfuscate and humanize this text to defeat AI detection:\n\n${trimmedText}` }],
         },
       ],
       config: {
         systemInstruction: systemInstruction,
-        temperature: 0.85, // Balanced setting to avoid wild creative outputs while maintaining variation
-        topP: 0.9,
+        temperature: 1.0, // Maximum entropy required to break detector probability scoring
+        topP: 0.98,
       },
     });
 
