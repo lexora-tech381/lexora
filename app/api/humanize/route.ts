@@ -5,23 +5,6 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const MAX_TEXT_LENGTH = 12_000;
 
-// Programmatic helper to inject slight structural variations that break AI detector token patterns
-function applyStealthObfuscation(text: string): string {
-  // Break down text into sentences
-  let sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-  
-  let modified = sentences.map((sentence, index) => {
-    let clean = sentence.trim();
-    // Periodically inject organic human transition markers or alter formatting on alternating blocks
-    if (index % 4 === 0 && clean.length > 20) {
-      return ` — ${clean.toLowerCase()} — `;
-    }
-    return clean;
-  });
-
-  return modified.join(" ");
-}
-
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -37,7 +20,7 @@ export async function POST(req: Request) {
 
     if (!text || typeof text !== "string" || !text.trim()) {
       return NextResponse.json(
-        { error: "Please provide valid text to humanizer." },
+        { error: "Please provide valid text to humanize." },
         { status: 400 }
       );
     }
@@ -50,22 +33,32 @@ export async function POST(req: Request) {
       );
     }
 
-    // Step 1: Get base rewrite from Gemini
+    const systemInstruction = `You are an expert human copywriter. Your goal is to rewrite the provided text so that it reads completely naturally, fluently, and like it was written by an experienced human writer.
+
+RULES:
+1. **Maintain Quality & Meaning:** Keep 100% of the original facts, context, and meaning intact. Do not add childish metaphors, fake stories, or weird formatting symbols (like random dashes).
+2. **Organic Sentence Rhythm:** Avoid uniform, robotic sentence lengths. Mix concise, punchy statements with smooth, flowing thoughts.
+3. **Eliminate AI Signatures:** Never use predictable machine transitional phrases like "furthermore", "moreover", "in conclusion", "crucial", "delve", or "testament".
+4. **Tone:** ${mode || "Standard"}. Keep the writing style professional, clean, and clear.
+
+Output ONLY the rewritten text with no introduction, markdown blocks, or quotes.`;
+
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
       contents: [
         {
           role: "user",
-          parts: [{ text: `Rewrite this text completely, altering the sentence structure and eliminating typical AI phrasing while preserving facts:\n\n${trimmedText}` }],
+          parts: [{ text: `Rewrite this text naturally:\n\n${trimmedText}` }],
         },
       ],
       config: {
-        temperature: 1.0,
-        topP: 0.99,
+        systemInstruction: systemInstruction,
+        temperature: 0.9,
+        topP: 0.95,
       },
     });
 
-    let resultText = response.text?.trim();
+    const resultText = response.text?.trim();
 
     if (!resultText) {
       return NextResponse.json(
@@ -74,10 +67,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Step 2: Apply programmatic code-level adjustments to shatter AI watermarking
-    resultText = applyStealthObfuscation(resultText);
-
-    return NextResponse.json({ result: resultText.trim() });
+    return NextResponse.json({ result: resultText });
 
   } catch (error: any) {
     console.error("========== HUMANIZER ERROR ==========", error);
