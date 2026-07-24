@@ -30,8 +30,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // Call a specialized third-party humanizer/bypass endpoint
-    const apiResponse = await fetch("https://api.hixbypass.com/v1/generate", {
+    // Step 1: Create a generation task with BypassGPT API
+    const generateRes = await fetch("https://www.bypassgpt.ai/api/bypassgpt/v1/generate", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -39,22 +39,52 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         text: trimmedText,
-        mode: mode || "balanced", // e.g., fast, balanced, aggressive
+        mode: mode || "enhanced",
       }),
     });
 
-    if (!apiResponse.ok) {
-      const errorData = await apiResponse.json().catch(() => ({}));
-      throw new Error(errorData.message || "Failed to process text through bypass provider.");
+    if (!generateRes.ok) {
+      const errData = await generateRes.json().catch(() => ({}));
+      throw new Error(errData.message || "Failed to initiate generation task with BypassGPT.");
     }
 
-    const data = await apiResponse.json();
-    // Adjust based on the specific provider's JSON response structure
-    const resultText = data.result || data.output || data.text;
+    const generateData = await generateRes.json();
+    const taskId = generateData.task_id || generateData.id;
+
+    if (!taskId) {
+      throw new Error("Did not receive a valid task ID from the provider.");
+    }
+
+    // Step 2: Poll/Retrieve the completed text result (with a short timeout safety net)
+    let resultText = "";
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    while (attempts < maxAttempts) {
+      // Wait 2 seconds between checks
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      attempts++;
+
+      const retrievalRes = await fetch(`https://www.bypassgpt.ai/api/bypassgpt/v1/retrieval?task_id=${taskId}`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+        },
+      });
+
+      if (retrievalRes.ok) {
+        const retrievalData = await retrievalRes.json();
+        // Check if processing is complete
+        if (retrievalData.status === "completed" || retrievalData.result || retrievalData.output) {
+          resultText = retrievalData.result || retrievalData.output || retrievalData.text;
+          break;
+        }
+      }
+    }
 
     if (!resultText) {
       return NextResponse.json(
-        { error: "Received empty response from bypass provider." },
+        { error: "Task processing timed out or failed to return text." },
         { status: 500 }
       );
     }
