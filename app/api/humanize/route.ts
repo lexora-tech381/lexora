@@ -1,16 +1,13 @@
-import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const MAX_TEXT_LENGTH = 12_000;
 
 export async function POST(req: Request) {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.BYPASS_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { error: "Gemini API key is not configured in environment variables." },
+        { error: "Bypass API key is not configured in environment variables." },
         { status: 500 }
       );
     }
@@ -33,44 +30,39 @@ export async function POST(req: Request) {
       );
     }
 
-    const systemInstruction = `You are an expert human copywriter. Your goal is to rewrite the provided text so that it reads completely naturally, fluently, and like it was written by an experienced human writer.
-
-RULES:
-1. **Maintain Quality & Meaning:** Keep 100% of the original facts, context, and meaning intact. Do not add childish metaphors, fake stories, or weird formatting symbols (like random dashes).
-2. **Organic Sentence Rhythm:** Avoid uniform, robotic sentence lengths. Mix concise, punchy statements with smooth, flowing thoughts.
-3. **Eliminate AI Signatures:** Never use predictable machine transitional phrases like "furthermore", "moreover", "in conclusion", "crucial", "delve", or "testament".
-4. **Tone:** ${mode || "Standard"}. Keep the writing style professional, clean, and clear.
-
-Output ONLY the rewritten text with no introduction, markdown blocks, or quotes.`;
-
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: `Rewrite this text naturally:\n\n${trimmedText}` }],
-        },
-      ],
-      config: {
-        systemInstruction: systemInstruction,
-        temperature: 0.9,
-        topP: 0.95,
+    // Call a specialized third-party humanizer/bypass endpoint
+    const apiResponse = await fetch("https://api.hixbypass.com/v1/generate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
       },
+      body: JSON.stringify({
+        text: trimmedText,
+        mode: mode || "balanced", // e.g., fast, balanced, aggressive
+      }),
     });
 
-    const resultText = response.text?.trim();
+    if (!apiResponse.ok) {
+      const errorData = await apiResponse.json().catch(() => ({}));
+      throw new Error(errorData.message || "Failed to process text through bypass provider.");
+    }
+
+    const data = await apiResponse.json();
+    // Adjust based on the specific provider's JSON response structure
+    const resultText = data.result || data.output || data.text;
 
     if (!resultText) {
       return NextResponse.json(
-        { error: "Failed to generate text." },
+        { error: "Received empty response from bypass provider." },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ result: resultText });
+    return NextResponse.json({ result: resultText.trim() });
 
   } catch (error: any) {
-    console.error("========== HUMANIZER ERROR ==========", error);
+    console.error("========== BYPASS API ERROR ==========", error);
     return NextResponse.json(
       { error: error?.message || "An unexpected error occurred." },
       { status: 500 }
