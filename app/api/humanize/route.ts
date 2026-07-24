@@ -1,108 +1,81 @@
+import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
 
-const MAX_TEXT_LENGTH = 12_000;
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY!,
+});
+
+const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const MAX_TEXT_LENGTH = 12000;
 
 export async function POST(req: Request) {
   try {
-    const apiKey = process.env.BYPASS_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: "Bypass API key is not configured in environment variables." },
-        { status: 500 }
-      );
-    }
+    const { text, mode } = await req.json();
 
-    const body = await req.json();
-    const { text, mode } = body as { text?: string; mode?: string };
-
-    if (!text || typeof text !== "string" || !text.trim()) {
+    if (!text || typeof text !== "string") {
       return NextResponse.json(
-        { error: "Please provide valid text to humanize." },
+        { error: "Please enter some text." },
         { status: 400 }
       );
     }
 
-    const trimmedText = text.trim();
-    if (trimmedText.length > MAX_TEXT_LENGTH) {
+    if (text.length > MAX_TEXT_LENGTH) {
       return NextResponse.json(
-        { error: `Text exceeds character limit of ${MAX_TEXT_LENGTH}.` },
+        { error: "Text is too long." },
         { status: 400 }
       );
     }
 
-    // Step 1: Initiate generation task using official server path
-    const generateRes = await fetch("https://www.bypassgpt.ai/api/bypassgpt/v1/generate", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        text: trimmedText,
-        mode: mode || "enhanced",
-      }),
+    const tone =
+      mode === "Academic"
+        ? "academic"
+        : mode === "Professional"
+        ? "professional"
+        : mode === "Friendly"
+        ? "friendly"
+        : mode === "Simple"
+        ? "simple"
+        : "natural";
+
+    const prompt = `
+Rewrite the following text to improve readability, clarity, grammar, and overall flow.
+
+Requirements:
+- Preserve the original meaning.
+- Do not invent facts.
+- Keep approximately the same length.
+- Use a ${tone} tone.
+- Return only the rewritten text.
+
+Text:
+
+${text}
+`;
+
+    const response = await ai.models.generateContent({
+      model: MODEL,
+      contents: prompt,
     });
 
-    if (!generateRes.ok) {
-      const errText = await generateRes.text();
-      let errData;
-      try {
-        errData = JSON.parse(errText);
-      } catch {
-        errData = { message: errText };
-      }
-      throw new Error(errData.message || errData.error || `API error: ${generateRes.status}`);
+    const result = response.text;
+
+    if (!result) {
+      throw new Error("Empty response from Gemini.");
     }
 
-    const generateData = await generateRes.json();
-    const taskId = generateData.task_id || generateData.id || generateData.data?.task_id;
+    return NextResponse.json({
+      result: result.trim(),
+    });
+  } catch (err: any) {
+    console.error(err);
 
-    if (!taskId) {
-      throw new Error("Did not receive a valid task ID from the provider.");
-    }
-
-    // Step 2: Poll retrieval endpoint for the completed result
-    let resultText = "";
-    let attempts = 0;
-    const maxAttempts = 15;
-
-    while (attempts < maxAttempts) {
-      await new Promise((resolve) => setTimeout(resolve, 2500));
-      attempts++;
-
-      const retrievalRes = await fetch(`https://www.bypassgpt.ai/api/bypassgpt/v1/retrieval?task_id=${taskId}`, {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-        },
-      });
-
-      if (retrievalRes.ok) {
-        const retrievalData = await retrievalRes.json();
-        const status = retrievalData.status || retrievalData.data?.status;
-        const output = retrievalData.result || retrievalData.output || retrievalData.text || retrievalData.data?.result || retrievalData.data?.output;
-
-        if (status === "completed" || output) {
-          resultText = output;
-          break;
-        }
-      }
-    }
-
-    if (!resultText) {
-      return NextResponse.json(
-        { error: "Task processing timed out or failed to return text." },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ result: resultText.trim() });
-
-  } catch (error: any) {
-    console.error("========== BYPASS API ERROR ==========", error);
     return NextResponse.json(
-      { error: error?.message || "An unexpected error occurred." },
-      { status: 500 }
+      {
+        error: err.message || "Something went wrong.",
+      },
+      {
+        status: 500,
+      }
     );
   }
 }
