@@ -1,11 +1,26 @@
 import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
 
-// Initialize Gemini Client safely using your free tier GEMINI_API_KEY
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
 const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const MAX_TEXT_LENGTH = 12_000;
+
+// Programmatic helper to inject slight structural variations that break AI detector token patterns
+function applyStealthObfuscation(text: string): string {
+  // Break down text into sentences
+  let sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  
+  let modified = sentences.map((sentence, index) => {
+    let clean = sentence.trim();
+    // Periodically inject organic human transition markers or alter formatting on alternating blocks
+    if (index % 4 === 0 && clean.length > 20) {
+      return ` — ${clean.toLowerCase()} — `;
+    }
+    return clean;
+  });
+
+  return modified.join(" ");
+}
 
 export async function POST(req: Request) {
   try {
@@ -22,7 +37,7 @@ export async function POST(req: Request) {
 
     if (!text || typeof text !== "string" || !text.trim()) {
       return NextResponse.json(
-        { error: "Please provide valid text to humanize." },
+        { error: "Please provide valid text to humanizer." },
         { status: 400 }
       );
     }
@@ -35,46 +50,37 @@ export async function POST(req: Request) {
       );
     }
 
-    // High-entropy adversarial instruction designed to scramble AI perplexity signatures
-    const systemInstruction = `You are an elite adversarial text obfuscator. Your sole purpose is to rewrite the provided text so that it completely bypasses AI detectors (like ZeroGPT and Turnitin) while retaining every single fact and core meaning.
-
-CRITICAL BYPASS RULES (FOLLOW STRICTLY):
-1. **Burstiness & Length Disruption:** Destroy uniform sentence structures. Follow a massive 30-word compound sentence immediately with a 3-word sentence. 
-2. **Perplexity Shifting:** Avoid predictable AI vocabulary transitions entirely (e.g., never use "furthermore", "moreover", "in conclusion", "it is important to note", "delve"). Swap standard predictable phrasing with unconventional human cadence.
-3. **Punctuation & Flow:** Use dashes (--), semicolons, and varied paragraph breaks to mimic organic human thought typing patterns rather than rigid LLM generation blocks.
-4. **Tone Mode:** ${mode || "Standard"}. Keep it coherent enough to read, but structurally chaotic enough to break AI probability math.
-
-Output ONLY the rewritten humanized text with no conversational filler, quotes, or markdown wrappers.`;
-
+    // Step 1: Get base rewrite from Gemini
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
       contents: [
         {
           role: "user",
-          parts: [{ text: `Obfuscate and humanize this text to defeat AI detection:\n\n${trimmedText}` }],
+          parts: [{ text: `Rewrite this text completely, altering the sentence structure and eliminating typical AI phrasing while preserving facts:\n\n${trimmedText}` }],
         },
       ],
       config: {
-        systemInstruction: systemInstruction,
-        temperature: 1.0, // Maximum entropy required to break detector probability scoring
-        topP: 0.98,
+        temperature: 1.0,
+        topP: 0.99,
       },
     });
 
-    const resultText = response.text?.trim();
+    let resultText = response.text?.trim();
 
     if (!resultText) {
       return NextResponse.json(
-        { error: "Failed to generate humanized text. Please try again." },
+        { error: "Failed to generate text." },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ result: resultText });
+    // Step 2: Apply programmatic code-level adjustments to shatter AI watermarking
+    resultText = applyStealthObfuscation(resultText);
+
+    return NextResponse.json({ result: resultText.trim() });
 
   } catch (error: any) {
-    console.error("========== GEMINI HUMANIZER ERROR ==========", error);
-
+    console.error("========== HUMANIZER ERROR ==========", error);
     return NextResponse.json(
       { error: error?.message || "An unexpected error occurred." },
       { status: 500 }
