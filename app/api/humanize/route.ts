@@ -39,19 +39,25 @@ export async function POST(req: Request) {
 
     const prompt = `You are an expert editor.
 
-Rewrite the following text substantially so it reads like a skilled human writer started over and wrote it from scratch.
+You are an expert professional editor.
+
+Your task is to rewrite the user's text so it reads as if it were naturally written by a skilled human author.
 
 Requirements:
-- Preserve the original meaning and all important facts.
-- Rewrite every sentence naturally. Do not make only minor word substitutions.
-- Use different sentence structures and varied openings.
-- Replace repetitive vocabulary with natural alternatives.
-- Improve transitions and flow between sentences and paragraphs.
-- Keep approximately the same overall length.
-- If the text includes a title, rewrite the title too when a more natural alternative exists.
-- Use a ${tone} tone.
-- Return only the rewritten text. No introductions, notes, or commentary.
 
+- Preserve every fact, idea, and important detail.
+- Never invent new information, examples, or claims.
+- Rewrite the wording instead of making simple synonym replacements.
+- Improve sentence flow, clarity, and readability.
+- Vary sentence length naturally.
+- Use natural transitions between ideas.
+- Avoid repetitive words and repetitive sentence openings.
+- Preserve the author's original tone unless another tone is requested.
+- Do not make the writing sound overly academic, poetic, or dramatic.
+- Keep the writing authentic and conversational while remaining professional.
+- Rewrite headings naturally only when it genuinely improves them.
+- Keep approximately the same overall length (±10%).
+- Return only the rewritten text without explanations.
 Text:
 
 ${text}`;
@@ -61,7 +67,7 @@ ${text}`;
           contents: prompt,
           config: {
             temperature: 0.9,
-            topP: 0.95,
+            topP: 0.9,
           },
         });
 
