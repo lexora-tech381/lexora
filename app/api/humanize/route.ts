@@ -172,6 +172,13 @@ function findSimpleConjunctionIndex(sentence: string): number {
   return bestIndex;
 }
 
+function rawPart2NeedsSimpleEmDash(rawPart2: string): boolean {
+  // Relative pronouns / subordinators that already carry clause glue
+  return /^(while|when|which|because|where|whereas|although|though|unless|until|after|before|since|if|as|and|but|so|or)\b/i.test(
+    rawPart2.trim(),
+  );
+}
+
 function fractureLongSentences(
   paragraph: string,
   lastTransitionIndexRef: { value: number },
@@ -197,11 +204,15 @@ function fractureLongSentences(
           firstSpace === -1 ? "" : remainder.substring(firstSpace + 1).trim();
 
         if (part1 && rawPart2) {
-          const transitionIndex = pickAlternateTransitionIndex(
-            lastTransitionIndexRef.value,
-          );
-          lastTransitionIndexRef.value = transitionIndex;
-          const transition = CLAUSE_TRANSITIONS[transitionIndex];
+          // Avoid run-ons like: "— ... when while corporate departments..."
+          let transition = " — ";
+          if (!rawPart2NeedsSimpleEmDash(rawPart2)) {
+            const transitionIndex = pickAlternateTransitionIndex(
+              lastTransitionIndexRef.value,
+            );
+            lastTransitionIndexRef.value = transitionIndex;
+            transition = CLAUSE_TRANSITIONS[transitionIndex];
+          }
 
           processedSentences.push(
             `${part1}${transition}${rawPart2}`
@@ -271,9 +282,10 @@ function programmaticHumanizeFilter(text: string): string {
   return asymmetricParagraphs
     .join("\n\n")
     .replace(/^#+\s*/gm, "")
-    .replace(/\s+/g, (match) => (match.includes("\n") ? match : " "))
+    .replace(/[^\S\n]+/g, " ")
     .replace(/,\s*—/g, " —")
     .replace(/[ \t]+$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
