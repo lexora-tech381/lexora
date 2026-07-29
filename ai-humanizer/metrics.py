@@ -1,44 +1,57 @@
-"""Text structure metrics for burstiness and AI-risk approximation."""
+"""Advanced structural and lexical metrics for adversarial humanization."""
 
 from __future__ import annotations
 
 import math
 import re
 from collections import Counter
-from typing import List
+from typing import Dict, List, Tuple
 
 import numpy as np
 
-SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"'(])")
+SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"'(0-9])")
 
-AI_TRANSITIONS = [
-    "in conclusion",
+HIGH_RISK_LEXICON = [
+    "delve",
+    "delves",
+    "delving",
+    "tapestry",
+    "multifaceted",
     "furthermore",
     "moreover",
-    "additionally",
-    "in today's fast-paced world",
-    "it is important to note",
-    "as a result",
-    "on the other hand",
-    "in summary",
-    "to summarize",
-    "overall",
+    "testament",
+    "paramount",
+    "pivotal",
+    "crucial",
+    "leverage",
+    "leveraging",
+    "foster",
+    "fostering",
+    "underscore",
+    "underscores",
+    "seamless",
+    "embark",
+    "embarking",
     "ultimately",
     "consequently",
-    "therefore",
-    "in addition",
-    "that being said",
-    "with that in mind",
-    "moving forward",
-    "one of the main",
-    "a key aspect",
+    "additionally",
+    "in conclusion",
+    "in today's fast-paced world",
+    "it is important to note",
     "plays a crucial role",
-    "it is worth noting",
+    "a myriad of",
+    "plethora of",
+    "reap the benefits",
+    "cultivate a greater sense",
+    "much-needed respite",
 ]
+
+MIN_BURSTINESS_STD = 12.0
+MIN_ADJACENT_LENGTH_DELTA = 7
 
 
 def split_sentences(text: str) -> List[str]:
-    cleaned = re.sub(r"\s+", " ", text.strip())
+    cleaned = re.sub(r"[ \t]+", " ", text.strip())
     if not cleaned:
         return []
     parts = SENTENCE_SPLIT_RE.split(cleaned)
@@ -46,109 +59,139 @@ def split_sentences(text: str) -> List[str]:
 
 
 def word_count(sentence: str) -> int:
-    words = re.findall(r"[A-Za-z0-9']+", sentence)
-    return len(words)
+    return len(re.findall(r"[A-Za-z0-9']+", sentence))
 
 
-def calculate_burstiness(text: str) -> float:
+def sentence_lengths(text: str) -> List[int]:
+    return [word_count(sentence) for sentence in split_sentences(text)]
+
+
+def calculate_advanced_burstiness(text: str) -> float:
     """
-    Standard deviation of sentence lengths (in words).
-    Higher values generally indicate more human-like rhythm.
+    Standard deviation of sentence lengths (words).
+    Outputs below MIN_BURSTINESS_STD (12.0) should be rejected by the pipeline.
     """
-    sentences = split_sentences(text)
-    if len(sentences) <= 1:
+    lengths = sentence_lengths(text)
+    if len(lengths) <= 1:
         return 0.0
-
-    lengths = np.array([word_count(sentence) for sentence in sentences], dtype=float)
-    if lengths.std() == 0:
-        return 0.0
-    return float(np.std(lengths, ddof=1)) if len(lengths) > 1 else float(np.std(lengths))
+    arr = np.array(lengths, dtype=float)
+    return float(np.std(arr, ddof=1))
 
 
-def _uniformity_penalty(text: str) -> float:
-    sentences = split_sentences(text)
-    if len(sentences) < 3:
-        return 15.0
+def check_sentence_length_alternation(text: str) -> Tuple[bool, str]:
+    """
+    Hard filter: any three consecutive sentences whose pairwise word-count
+    differences are all < 7 fails validation.
+    """
+    lengths = sentence_lengths(text)
+    if len(lengths) < 3:
+        return True, "Too few sentences for alternation check."
 
-    lengths = [word_count(sentence) for sentence in sentences]
-    mean = sum(lengths) / len(lengths)
-    if mean == 0:
-        return 40.0
-
-    variance = sum((length - mean) ** 2 for length in lengths) / len(lengths)
-    cv = math.sqrt(variance) / mean
-    # Low coefficient of variation => more uniform => higher risk
-    if cv < 0.2:
-        return 35.0
-    if cv < 0.35:
-        return 20.0
-    if cv < 0.5:
-        return 10.0
-    return 0.0
+    for index in range(len(lengths) - 2):
+        a, b, c = lengths[index], lengths[index + 1], lengths[index + 2]
+        deltas = [abs(a - b), abs(b - c), abs(a - c)]
+        if all(delta < MIN_ADJACENT_LENGTH_DELTA for delta in deltas):
+            return (
+                False,
+                (
+                    f"Flat rhythm at sentences {index + 1}-{index + 3}: "
+                    f"lengths={a},{b},{c} (all deltas < {MIN_ADJACENT_LENGTH_DELTA})."
+                ),
+            )
+    return True, "Sentence-length alternation passed."
 
 
-def _transition_penalty(text: str) -> float:
+def evaluate_semantic_fingerprint(text: str) -> Dict[str, float | list | int]:
+    """
+    Lexical density risk from high-risk AI signature clusters.
+    Returns penalty score and matched terms.
+    """
     lower = text.lower()
-    hits = sum(1 for phrase in AI_TRANSITIONS if phrase in lower)
-    return min(40.0, hits * 6.5)
+    matches = [term for term in HIGH_RISK_LEXICON if term in lower]
+    # Cluster density: repeated high-risk hits compound the penalty
+    unique_hits = len(set(matches))
+    raw_hits = len(matches)
+    penalty = float(unique_hits * 12.0 + max(0, raw_hits - unique_hits) * 4.0)
+
+    tokens = re.findall(r"[a-z']+", lower)
+    if tokens:
+        risk_token_hits = sum(
+            1
+            for token in tokens
+            if token
+            in {
+                "delve",
+                "tapestry",
+                "multifaceted",
+                "furthermore",
+                "moreover",
+                "testament",
+                "paramount",
+                "pivotal",
+                "crucial",
+                "leverage",
+                "foster",
+                "underscore",
+                "seamless",
+                "embark",
+                "ultimately",
+            }
+        )
+        density = risk_token_hits / max(1, len(tokens))
+        penalty += density * 400.0
+
+    return {
+        "penalty": round(min(100.0, penalty), 2),
+        "matches": sorted(set(matches)),
+        "hit_count": raw_hits,
+    }
 
 
-def _opening_repetition_penalty(text: str) -> float:
-    sentences = split_sentences(text)
-    if len(sentences) < 2:
-        return 0.0
-
-    openings = []
-    for sentence in sentences:
-        tokens = re.findall(r"[A-Za-z']+", sentence.lower())
-        if not tokens:
-            continue
-        openings.append(" ".join(tokens[:2]))
-
-    if not openings:
-        return 0.0
-
-    counts = Counter(openings)
-    repeats = sum(count - 1 for count in counts.values() if count > 1)
-    return min(20.0, repeats * 4.0)
-
-
-def _ngram_predictability_penalty(text: str) -> float:
+def calculate_local_token_entropy(text: str, window: int = 12) -> float:
+    """
+    Approximate localized token entropy over sliding windows.
+    Higher average entropy usually correlates with less formulaic prose.
+    """
     tokens = re.findall(r"[a-z']+", text.lower())
-    if len(tokens) < 20:
-        return 5.0
+    if len(tokens) < window:
+        counts = Counter(tokens)
+        total = sum(counts.values()) or 1
+        return float(
+            -sum((count / total) * math.log2(count / total) for count in counts.values())
+        )
 
-    bigrams = list(zip(tokens, tokens[1:]))
-    trigrams = list(zip(tokens, tokens[1:], tokens[2:]))
+    entropies: List[float] = []
+    for start in range(0, len(tokens) - window + 1, max(1, window // 2)):
+        chunk = tokens[start : start + window]
+        counts = Counter(chunk)
+        total = len(chunk)
+        entropy = -sum(
+            (count / total) * math.log2(count / total) for count in counts.values()
+        )
+        entropies.append(entropy)
 
-    bigram_counts = Counter(bigrams)
-    trigram_counts = Counter(trigrams)
-
-    repeated_bigrams = sum(1 for count in bigram_counts.values() if count >= 3)
-    repeated_trigrams = sum(1 for count in trigram_counts.values() if count >= 2)
-
-    score = repeated_bigrams * 1.5 + repeated_trigrams * 2.5
-    return min(25.0, score)
+    return float(round(sum(entropies) / len(entropies), 4)) if entropies else 0.0
 
 
-def calculate_predictability_score(text: str) -> float:
-    """
-    Approximate AI-risk score from 0 (low risk / more human) to 100 (high risk / more AI-like).
-    Uses transitional phrasing, sentence uniformity, opening repetition, and n-gram reuse.
-    """
-    if not text or not text.strip():
-        return 100.0
+def evaluate_output(text: str) -> Dict[str, float | bool | str | list | int]:
+    burstiness = calculate_advanced_burstiness(text)
+    fingerprint = evaluate_semantic_fingerprint(text)
+    alternation_ok, alternation_msg = check_sentence_length_alternation(text)
+    entropy = calculate_local_token_entropy(text)
 
-    score = 0.0
-    score += _transition_penalty(text)
-    score += _uniformity_penalty(text)
-    score += _opening_repetition_penalty(text)
-    score += _ngram_predictability_penalty(text)
+    passed = (
+        burstiness >= MIN_BURSTINESS_STD
+        and float(fingerprint["penalty"]) <= 0.0
+        and alternation_ok
+    )
 
-    burstiness = calculate_burstiness(text)
-    if burstiness < 4.0:
-        score += 20.0
-    elif burstiness < 8.0:
-        score += 10.0
-
-    return float(max(0.0, min(100.0, round(score, 2))))
+    return {
+        "passed": passed,
+        "burstiness_score": round(burstiness, 3),
+        "lexical_penalty": float(fingerprint["penalty"]),
+        "lexical_matches": fingerprint["matches"],
+        "alternation_ok": alternation_ok,
+        "alternation_message": alternation_msg,
+        "token_entropy": entropy,
+        "min_burstiness_required": MIN_BURSTINESS_STD,
+    }
