@@ -8,6 +8,14 @@ const ai = new GoogleGenAI({
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const MAX_TEXT_LENGTH = 12000;
 
+const TRANSITION_BREAKS = [
+  ", which means ",
+  ", especially since ",
+  "—and frankly, ",
+  "—mostly because ",
+  ", meaning ",
+];
+
 function programmaticHumanizeFilter(text: string): string {
   // 1. Dynamic replacement of AI signifiers
   const replacements: { [key: string]: string } = {
@@ -29,79 +37,72 @@ function programmaticHumanizeFilter(text: string): string {
     filteredText = filteredText.replace(regex, humanWord);
   });
 
-  // 2. Safe, crash-proof burstiness injector
-  const sentences =
-    filteredText.match(/[^.!?]+[.!?]+(?:\s|$)/g) || [filteredText];
-  const processedSentences: string[] = [];
-  const transitionBreaks = [
-    ", which means ",
-    ", especially since ",
-    "—and frankly, ",
-    "—mostly because ",
-    ", meaning ",
-  ];
+  // 2. Process paragraph by paragraph to preserve layout
+  const paragraphs = filteredText
+    .split(/\n+/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
 
-  for (let i = 0; i < sentences.length; i++) {
-    let current = sentences[i].trim();
-    if (!current) continue;
+  const processedParagraphs = paragraphs.map((paragraph) => {
+    const sentences =
+      paragraph.match(/[^.!?]+[.!?]+(\s|$)/g) || [paragraph];
+    const processedSentences: string[] = [];
 
-    const wordCount = current.split(/\s+/).filter(Boolean).length;
+    for (let i = 0; i < sentences.length; i += 1) {
+      const current = sentences[i].trim();
+      if (!current) continue;
 
-    // Only attempt to split if the sentence is overly long
-    if (wordCount > 18) {
-      // Prefer the earliest natural break: comma or coordinating conjunction
-      const commaMatch = /,\s*/.exec(current);
-      const conjunctionMatch = /\s+(and|but|so|or)\s+/i.exec(current);
+      const wordCount = current.split(/\s+/).filter(Boolean).length;
 
-      let breakStart = -1;
-      let breakLength = 0;
+      // Only split long sentences, and only on safe conjunction phrases
+      if (wordCount > 18) {
+        const conjunctionMatch = /\s+(and|but|so|or)\s+/i.exec(current);
 
-      if (commaMatch && typeof commaMatch.index === "number") {
-        breakStart = commaMatch.index;
-        breakLength = commaMatch[0].length;
-      }
+        if (
+          conjunctionMatch &&
+          typeof conjunctionMatch.index === "number" &&
+          conjunctionMatch.index > 0 &&
+          conjunctionMatch.index + conjunctionMatch[0].length < current.length
+        ) {
+          const part1 = current
+            .substring(0, conjunctionMatch.index)
+            .trim();
+          const part2 = current
+            .substring(conjunctionMatch.index + conjunctionMatch[0].length)
+            .trim();
 
-      if (
-        conjunctionMatch &&
-        typeof conjunctionMatch.index === "number" &&
-        (breakStart === -1 || conjunctionMatch.index < breakStart)
-      ) {
-        breakStart = conjunctionMatch.index;
-        breakLength = conjunctionMatch[0].length;
-      }
+          if (part1 && part2) {
+            const randomTransition =
+              TRANSITION_BREAKS[
+                Math.floor(Math.random() * TRANSITION_BREAKS.length)
+              ];
+            const right =
+              part2.charAt(0).toLowerCase() +
+              (part2.length > 1 ? part2.slice(1) : "");
 
-      // Guard: only split when both sides exist and indices are in range
-      if (
-        breakStart > 0 &&
-        breakLength > 0 &&
-        breakStart + breakLength < current.length
-      ) {
-        const part1 = current.substring(0, breakStart).trim();
-        const part2 = current.substring(breakStart + breakLength).trim();
-
-        if (part1 && part2) {
-          const randomTransition =
-            transitionBreaks[
-              Math.floor(Math.random() * transitionBreaks.length)
-            ];
-          const right =
-            part2.charAt(0).toLowerCase() +
-            (part2.length > 1 ? part2.slice(1) : "");
-          processedSentences.push(
-            `${part1}${randomTransition}${right}`.replace(/\s+/g, " ").trim(),
-          );
-          continue;
+            processedSentences.push(
+              `${part1}${randomTransition}${right}`
+                .replace(/\s+/g, " ")
+                .trim(),
+            );
+            continue;
+          }
         }
       }
+
+      // No safe conjunction found — leave the sentence alone
+      processedSentences.push(current);
     }
 
-    processedSentences.push(current);
-  }
+    return processedSentences.join(" ").replace(/\s+/g, " ").trim();
+  });
 
-  return processedSentences
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .replace(/\s+([,.;:!?])/g, "$1")
+  // 3. Rejoin paragraphs and strip accidental markdown headers
+  return processedParagraphs
+    .join("\n\n")
+    .replace(/^#+\s*/gm, "")
+    .replace(/\s+/g, (match) => (match.includes("\n") ? match : " "))
+    .replace(/[ \t]+$/gm, "")
     .trim();
 }
 
@@ -151,7 +152,8 @@ export async function POST(req: Request) {
     - Eliminate formal transitions like 'Furthermore', 'Moreover', and 'In conclusion'.
     - Use conversational qualifiers and structural hesitation (e.g., 'Now, looking at this...', 'Granted, it means...').
     - Speak entirely in the active voice. Drop passive descriptions.
-    - Emulate the style of ${structuralStyle}. Return ONLY the raw rewritten content. No chat, no notes.
+    - Preserve natural paragraph breaks from the source structure.
+    - Emulate the style of ${structuralStyle}. Return ONLY the raw rewritten content. No chat, no notes, no markdown headings.
 
     Text to rewrite:
     ${trimmedText}`;
@@ -184,9 +186,6 @@ export async function POST(req: Request) {
         ? err.message
         : "An internal processing error occurred.";
 
-    return NextResponse.json(
-      { error: message },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
