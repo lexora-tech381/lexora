@@ -41,27 +41,6 @@ const TRANSITION_BREAKS = [
 
 const COORDINATING_CONJUNCTIONS = new Set(["and", "but", "so", "or"]);
 
-const DANGLING_PREPOSITIONS = new Set([
-  "with",
-  "of",
-  "to",
-  "for",
-  "from",
-  "at",
-  "in",
-  "on",
-  "by",
-  "about",
-  "into",
-  "over",
-  "under",
-  "between",
-  "through",
-  "during",
-  "as",
-  "like",
-]);
-
 function countWords(sentence: string): number {
   const matches = sentence.match(/[A-Za-z0-9']+/g);
   return matches ? matches.length : 0;
@@ -84,39 +63,8 @@ function cleanClause(text: string): string {
     .trim();
 }
 
-function stripTrailingDanglingPreposition(text: string): string {
-  const words = cleanClause(text).split(/\s+/);
-  if (words.length < 2) return cleanClause(text);
-
-  const last = words[words.length - 1].toLowerCase().replace(/[^\w']/g, "");
-  if (DANGLING_PREPOSITIONS.has(last)) {
-    words.pop();
-  }
-  return cleanClause(words.join(" "));
-}
-
 function pickTransition(seed: number): string {
   return TRANSITION_BREAKS[seed % TRANSITION_BREAKS.length];
-}
-
-function sanitizeFinalText(text: string): string {
-  return text
-    .replace(/\r\n/g, "\n")
-    .replace(/[^\S\n]{2,}/g, " ")
-    .replace(/,\s*,+/g, ",")
-    .replace(/\s+,/g, ",")
-    .replace(/,(?=[^\s])/g, ", ")
-    .replace(/\s+—\s+/g, "—")
-    .replace(/[—–-]{2,}/g, "—")
-    .replace(/\s+-\s+/g, "—")
-    .replace(/(?:\s*—\s*)+$/g, "")
-    .replace(/\s+([,.;:!?])/g, "$1")
-    .replace(/([.!?])\s*([a-z])/g, (_match, punct: string, letter: string) => {
-      return `${punct} ${letter.toUpperCase()}`;
-    })
-    .replace(/\s+/g, (match) => (match.includes("\n") ? match : " "))
-    .replace(/[ \t]+$/gm, "")
-    .trim();
 }
 
 /**
@@ -131,7 +79,6 @@ function softenLongSentence(sentence: string, seed: number): string {
   const words = trimmed.split(/\s+/);
   let breakIndex = -1;
   let breakType: "comma" | "conjunction" | null = null;
-  let conjunctionToken = "";
 
   for (let index = 3; index < words.length - 3; index += 1) {
     const raw = words[index];
@@ -146,7 +93,6 @@ function softenLongSentence(sentence: string, seed: number): string {
     if (COORDINATING_CONJUNCTIONS.has(normalized)) {
       breakIndex = index;
       breakType = "conjunction";
-      conjunctionToken = normalized;
       break;
     }
   }
@@ -156,41 +102,22 @@ function softenLongSentence(sentence: string, seed: number): string {
     return trimmed;
   }
 
-  let left = cleanClause(words.slice(0, breakIndex).join(" "));
-  left = stripTrailingDanglingPreposition(left);
-
+  const left = cleanClause(words.slice(0, breakIndex).join(" "));
   const right = cleanClause(words.slice(breakIndex + 1).join(" "));
+
   if (!left || !right) return trimmed;
 
   // Keep right clause lowercase when bridging with a transition/em-dash,
   // so we never create "anxious. Disappointed" style period splits.
   const rightJoined =
     right.charAt(0).toLowerCase() + (right.length > 1 ? right.slice(1) : "");
-  const rightWordCount = countWords(rightJoined);
-
-  // Avoid awkward short em-dash splices like "students — workers" / "believe it — not"
-  if (breakType === "conjunction") {
-    if (
-      (conjunctionToken === "and" || conjunctionToken === "or") &&
-      rightWordCount <= 3
-    ) {
-      return cleanClause(`${left} ${conjunctionToken} ${rightJoined}`);
-    }
-
-    if (conjunctionToken === "but" || conjunctionToken === "so") {
-      const bridge = pickTransition(seed);
-      return cleanClause(`${left}${bridge}${rightJoined}`);
-    }
-  }
 
   if (breakType === "comma" || seed % 2 === 0) {
     const bridge = pickTransition(seed);
-    // Transition phrases already include leading punctuation; avoid ", with," style debris.
     return cleanClause(`${left}${bridge}${rightJoined}`);
   }
 
-  // Tight em-dash join (no surrounding spaces) for cleaner punctuation
-  return cleanClause(`${left}—${rightJoined}`);
+  return cleanClause(`${left} — ${rightJoined}`);
 }
 
 function programmaticHumanizeFilter(text: string): string {
@@ -206,25 +133,32 @@ function programmaticHumanizeFilter(text: string): string {
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
 
-  const processedSentencesByParagraph = paragraphs.map(
-    (paragraph, paragraphIndex) => {
-      const sentences = splitIntoSentences(paragraph);
-      const reshaped = sentences.map((sentence, sentenceIndex) =>
-        softenLongSentence(
-          sentence,
-          paragraphIndex + sentenceIndex + sentence.length,
-        ),
-      );
+  const rebuilt = paragraphs.map((paragraph, paragraphIndex) => {
+    const sentences = splitIntoSentences(paragraph);
+    const reshaped = sentences.map((sentence, sentenceIndex) =>
+      softenLongSentence(sentence, paragraphIndex + sentenceIndex + sentence.length),
+    );
 
-      return reshaped
-        .map((sentence) => cleanClause(sentence))
-        .filter(Boolean)
-        .join(" ");
-    },
-  );
+    return reshaped
+      .map((sentence) => cleanClause(sentence))
+      .filter(Boolean)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .replace(/\s+([,.;:!?])/g, "$1")
+      .replace(/[—–-]{2,}/g, "—")
+      .replace(/\s*—\s*/g, " — ")
+      .replace(/\s+/g, " ")
+      .trim();
+  });
 
-  const joined = processedSentencesByParagraph.join("\n\n");
-  return sanitizeFinalText(joined);
+  return rebuilt
+    .join("\n\n")
+    .replace(/[^\S\n]{2,}/g, " ")
+    .replace(/[ \t]+$/gm, "")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .replace(/(?:—\s*)+$/g, "")
+    .replace(/\s+/g, (match) => (match.includes("\n") ? match : " "))
+    .trim();
 }
 
 function resolvePersona(mode: unknown): { tone: string; identity: string } {
