@@ -8,8 +8,6 @@ const ai = new GoogleGenAI({
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const MAX_TEXT_LENGTH = 12000;
 
-const CONJUNCTION_PATTERN = /\b(and|but|so|or|while|because)\b/gi;
-
 const PARAGRAPH_TRANSITION_INSERTS = [
   " — a metric that explicitly reveals why ",
   " — which, from a tactical execution angle, means that ",
@@ -181,31 +179,32 @@ function extractSentences(paragraph: string): string[] {
   return matched.map((sentence) => sentence.trim()).filter(Boolean);
 }
 
-function findConjunctionMatch(sentence: string): RegExpExecArray | null {
-  CONJUNCTION_PATTERN.lastIndex = 0;
-
+function findSafeSpacedConjunctionMatch(
+  sentence: string,
+): RegExpExecArray | null {
+  // Strict space-wrapped coordinating conjunctions only (avoids list-item cuts)
+  const spacedConjunctionPattern = /\s+(and|but|so|or|because)\s+/gi;
+  let conjunctionMatch: RegExpExecArray | null =
+    spacedConjunctionPattern.exec(sentence);
   let bestMatch: RegExpExecArray | null = null;
   let bestDistance = Number.POSITIVE_INFINITY;
   const midpoint = Math.floor(sentence.length / 2);
-  let conjunctionMatch: RegExpExecArray | null =
-    CONJUNCTION_PATTERN.exec(sentence);
 
   while (conjunctionMatch !== null) {
     if (
       typeof conjunctionMatch.index === "number" &&
       typeof conjunctionMatch[0] === "string" &&
-      conjunctionMatch[0].length > 0 &&
-      conjunctionMatch.index > 12 &&
-      conjunctionMatch.index + conjunctionMatch[0].length < sentence.length - 12
+      conjunctionMatch[0].length > 0
     ) {
-      const left = sentence.substring(0, conjunctionMatch.index).trim();
-      const right = sentence
+      const part1 = sentence.substring(0, conjunctionMatch.index).trim();
+      const part2 = sentence
         .substring(conjunctionMatch.index + conjunctionMatch[0].length)
         .trim();
-      const leftWords = left.split(/\s+/).filter(Boolean).length;
-      const rightWords = right.split(/\s+/).filter(Boolean).length;
+      const part1Words = part1.split(/\s+/).filter(Boolean).length;
+      const part2Words = part2.split(/\s+/).filter(Boolean).length;
 
-      if (leftWords >= 4 && rightWords >= 3) {
+      // Skip short list fragments / parallel noun groups
+      if (part1Words >= 4 && part2Words >= 4) {
         const distance = Math.abs(conjunctionMatch.index - midpoint);
         if (distance < bestDistance) {
           bestDistance = distance;
@@ -214,7 +213,7 @@ function findConjunctionMatch(sentence: string): RegExpExecArray | null {
       }
     }
 
-    conjunctionMatch = CONJUNCTION_PATTERN.exec(sentence);
+    conjunctionMatch = spacedConjunctionPattern.exec(sentence);
   }
 
   return bestMatch;
@@ -258,7 +257,7 @@ function structuralInversionParser(paragraph: string): string {
       continue;
     }
 
-    const conjunctionMatch = findConjunctionMatch(current);
+    const conjunctionMatch = findSafeSpacedConjunctionMatch(current);
 
     if (
       !conjunctionMatch ||
@@ -276,12 +275,19 @@ function structuralInversionParser(paragraph: string): string {
       .substring(conjunctionMatch.index + matchedWord.length)
       .trim();
 
-    if (!part1 || !part2) {
+    const part1Words = part1.split(/\s+/).filter(Boolean).length;
+    const part2Words = part2.split(/\s+/).filter(Boolean).length;
+
+    // Leave short list halves alone to prevent punctuation drops in noun groups
+    if (!part1 || !part2 || part1Words < 4 || part2Words < 4) {
       processedSentences.push(current);
       continue;
     }
 
     const randomInsert = pickUnusedTransitionInsert(usedInsertIndexes);
+    const conjunctionToken = (conjunctionMatch[1] ?? matchedWord)
+      .toLowerCase()
+      .trim();
 
     // Never reuse the same transition twice in one paragraph block
     if (randomInsert) {
@@ -296,7 +302,7 @@ function structuralInversionParser(paragraph: string): string {
 
     // Exhausted unique inserts for this paragraph: keep original conjunction cleanly
     processedSentences.push(
-      `${part1} — ${matchedWord.toLowerCase().trim()} ${part2}`
+      `${part1} — ${conjunctionToken} ${part2}`
         .replace(/\s+/g, " ")
         .replace(/,\s*—/g, " —")
         .trim(),
