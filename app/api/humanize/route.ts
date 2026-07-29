@@ -8,28 +8,29 @@ const ai = new GoogleGenAI({
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const MAX_TEXT_LENGTH = 12000;
 
+// High-level professional transitions that maintain executive prose authority
 const CLAUSE_TRANSITIONS = [
-  " — a detail that shows why ",
-  " — which realistically means ",
-  " — primarily because ",
-  " — and this matters because ",
-  " — a point that becomes clearer when ",
-  " — which, in practice, means ",
+  " — an analytical reality highlighting why ",
+  " — which, from an execution standpoint, implies that ",
+  " — driven primarily by the fact that ",
+  " — a structural factor that becomes clear when ",
+  " — fundamentally indicating that ",
+  " — an outcome directly correlated with the reality that ",
 ] as const;
 
 const ADVERSARIAL_STYLE_CORE =
-  "You are a human expert providing a raw, unpolished brain-dump critique of a draft. You must actively introduce structural imperfection into the logic flow. Break standard academic writing structures entirely. Do not group ideas cleanly. Mix definitions with practical, blunt conclusions. Inject spontaneous professional caveats using parentheticals, such as (and let's be realistic here), (which is often overlooked), or (frankly speaking) mid-sentence. Write with highly volatile clause variance. Alternate between dense compound sentences wrapped in semicolons and single-word fragments. Never write two paragraphs that follow a similar logical progression.";
+  "You are a senior institutional researcher rewriting a draft for an executive journal. You must maintain sophisticated, formal terminology but completely destroy standard, linear machine prose loops. Use asymmetric clause placements, vary sentence lengths aggressively (alternating short dynamic facts with multi-clause compound sentences using semicolons), and avoid predictable transitional triplets or rigid summaries at the end of paragraphs. Never organize arguments symmetrically. Mix core definitions with practical, sharp conclusions. Avoid predictable transitional loops like 'Furthermore', 'Moreover', and 'In conclusion'.";
 
 function resolveStructuralStyle(styleKey: unknown): string {
   if (styleKey === "Academic") {
-    return `${ADVERSARIAL_STYLE_CORE} Write as an expert academic scholar delivering an investigative critique. Keep vocabulary sophisticated where needed, but never tidy the argument into polished textbook symmetry.`;
+    return `${ADVERSARIAL_STYLE_CORE} Write as an expert academic scholar delivering an investigative analysis. Keep terminology highly sophisticated, dense, and intellectually authoritative without conforming to standard textbook templates.`;
   }
 
   if (styleKey === "Professional") {
-    return `${ADVERSARIAL_STYLE_CORE} Write as a senior corporate analyst delivering a blunt industry critique. Keep terminology precise and business-aware, but never tidy the argument into polished whitepaper symmetry.`;
+    return `${ADVERSARIAL_STYLE_CORE} Write as a senior corporate analyst delivering a critical market whitepaper. Maintain highly polished, business-aware terminology, but introduce natural structural asymmetry throughout the prose.`;
   }
 
-  return `${ADVERSARIAL_STYLE_CORE} Write as a clear, direct communicator. Prefer plain wording over jargon, but still break predictable paragraph logic.`;
+  return `${ADVERSARIAL_STYLE_CORE} Write as a clear, direct corporate communicator. Prefer precise, transparent explanations while entirely bypassing machine rhythmic patterns.`;
 }
 
 function pickAlternateTransitionIndex(lastUsedIndex: number): number {
@@ -46,54 +47,52 @@ function pickAlternateTransitionIndex(lastUsedIndex: number): number {
 }
 
 function applyVocabularyRandomization(text: string): string {
-  // Longer phrases first so multi-word markers win over single-word overlaps
   const vocabularyMap: Array<[string, string]> = [
-    ["effectively mitigate", "help cut down"],
-    ["cognitive enhancement", "mental shift"],
-    ["cognitive resilience", "mental toughness"],
+    ["effectively mitigate", "measurably reduce"],
+    ["cognitive enhancement", "heightened cognitive performance"],
+    ["cognitive resilience", "sustained cognitive endurance"],
     ["fundamentally", "at its core"],
-    ["individuals", "people"],
+    ["individuals", "participants"],
     ["discipline", "practice"],
-    ["mitigate", "blunt"],
-    ["induce", "trigger"],
-    ["advantageous", "useful"],
+    ["mitigate", "temper"],
+    ["induce", "prompt"],
+    ["advantageous", "strategically useful"],
     ["simultaneously", "at the same time"],
-    ["nurtures", "backs"],
-    ["nurture", "back"],
+    ["nurtures", "reinforces"],
+    ["nurture", "reinforce"],
     ["fosters", "builds"],
     ["foster", "build"],
     ["In conclusion", "Ultimately"],
     ["Furthermore", "Also"],
-    ["Moreover", "On top of that"],
+    ["Moreover", "Beyond that"],
     ["In summary", "In short"],
-    ["Tapestry of", "Mix of"],
-    ["Testament to", "Proof of"],
-    ["Delve into", "Look at"],
+    ["Tapestry of", "Interplay of"],
+    ["Testament to", "Evidence of"],
+    ["Delve into", "Examine"],
     ["systematically enhance", "measurably improve"],
-    ["substantial support", "clear backing"],
+    ["substantial support", "clear empirical backing"],
     ["it is important to note", "worth noting"],
     ["in order to", "to"],
     ["due to the fact that", "because"],
     ["a significant number of", "many"],
     ["has the potential to", "can"],
-    ["leverage", "use"],
+    ["leverage", "apply"],
     ["utilize", "use"],
     ["utilizes", "uses"],
-    ["facilitate", "support"],
-    ["facilitates", "supports"],
-    ["robust", "strong"],
-    ["holistic", "complete"],
-    ["paradigm", "model"],
+    ["facilitate", "enable"],
+    ["facilitates", "enables"],
+    ["robust", "durable"],
+    ["holistic", "integrated"],
+    ["paradigm", "framework"],
     ["synergy", "coordination"],
     ["plethora of", "many"],
     ["a myriad of", "many"],
     ["in the realm of", "in"],
     ["shed light on", "clarify"],
-    ["key takeaway", "main point"],
+    ["key takeaway", "central implication"],
   ];
 
   let randomized = text;
-
   vocabularyMap.forEach(([aiMarker, humanVariant]) => {
     const escaped = aiMarker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const regex = new RegExp(`\\b${escaped}\\b`, "gi");
@@ -117,7 +116,6 @@ function isSafeConjunctionSplit(part1: string, rawPart2: string): boolean {
   );
   const firstWord = (part2Words[0] ?? "").replace(/[^\w']/g, "");
 
-  // Avoid cutting parallel participles: "directing and focusing"
   if (/ing$/i.test(lastWord) && /ing$/i.test(firstWord)) {
     return false;
   }
@@ -218,10 +216,7 @@ function fractureLongSentences(
 }
 
 function programmaticHumanizeFilter(text: string): string {
-  // Stage 2A: vocabulary randomization matrix
   const vocabularyShattered = applyVocabularyRandomization(text);
-
-  // Track last transition across the whole document to prevent duplicate loops
   const lastTransitionIndexRef = { value: -1 };
 
   const paragraphs = vocabularyShattered
@@ -229,7 +224,6 @@ function programmaticHumanizeFilter(text: string): string {
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
 
-  // Stage 2B: conjunction fracture with unpredictable clause transitions
   const processedParagraphs = paragraphs.map((paragraph) =>
     fractureLongSentences(paragraph, lastTransitionIndexRef),
   );
@@ -286,14 +280,12 @@ Identity and method:
 ${structuralStyle}
 
 Non-negotiable rewrite laws:
-- Actively introduce structural imperfection into the logic flow.
-- Break standard academic writing structures entirely.
-- Do not group ideas cleanly.
-- Mix definitions with practical, blunt conclusions.
-- Inject spontaneous professional caveats using parentheticals mid-sentence, such as (and let's be realistic here), (which is often overlooked), or (frankly speaking).
-- Write with highly volatile clause variance.
-- Alternate between dense compound sentences wrapped in semicolons and single-word fragments.
-- Never write two paragraphs that follow a similar logical progression.
+- Maintain sophisticated, formal terminology throughout.
+- Completely destroy standard, linear machine prose loops.
+- Use asymmetric clause placements.
+- Vary sentence lengths aggressively: alternate short dynamic facts with multi-clause compound sentences using semicolons.
+- Avoid predictable transitional triplets or rigid summaries at the end of paragraphs.
+- Do not use casual slang, brain-dump framing, or unpolished colloquial filler.
 - Preserve the depth and detail of the source. Do not summarize, skip examples, or compress explanations.
 - Match or slightly exceed the original length.
 - Preserve natural paragraph breaks from the source structure.
