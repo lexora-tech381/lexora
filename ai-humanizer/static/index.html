@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Humanizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        --ink: #14213d;
+        --panel: #f7f4ef;
+        --accent: #0f766e;
+        --accent-dark: #115e59;
+        --line: #d6d3d1;
+      }
+
+      body {
+        font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        background:
+          radial-gradient(circle at top left, #e7f5f3 0%, transparent 40%),
+          linear-gradient(180deg, #faf8f5 0%, #f0ebe3 100%);
+        color: var(--ink);
+      }
+
+      .panel {
+        background: rgba(255, 255, 255, 0.86);
+        border: 1px solid var(--line);
+        backdrop-filter: blur(8px);
+      }
+
+      textarea {
+        resize: none;
+      }
+
+      .spinner {
+        width: 1.25rem;
+        height: 1.25rem;
+        border: 2px solid rgba(255, 255, 255, 0.35);
+        border-top-color: #fff;
+        border-radius: 9999px;
+        animation: spin 0.8s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body class="min-h-screen">
+    <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <header class="mb-8">
+        <p class="text-sm font-semibold uppercase tracking-[0.18em] text-teal-800">
+          Structural Rewrite Engine
+        </p>
+        <h1 class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
+          AI Humanizer
+        </h1>
+        <p class="mt-3 max-w-2xl text-base text-slate-600">
+          Dual-layer rewrite pipeline with heuristic cleanup, LLM reconstruction, and an
+          adversarial burstiness loop.
+        </p>
+      </header>
+
+      <section class="panel mb-6 rounded-2xl p-4 sm:p-5">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div class="w-full max-w-md">
+            <label for="intensity" class="mb-2 block text-sm font-medium text-slate-700">
+              Intensity
+            </label>
+            <input
+              id="intensity"
+              type="range"
+              min="0"
+              max="2"
+              step="1"
+              value="1"
+              class="w-full accent-teal-700"
+            />
+            <div class="mt-2 flex justify-between text-xs text-slate-500">
+              <span>Low</span>
+              <span id="intensityLabel" class="font-semibold text-teal-800">Medium</span>
+              <span>High</span>
+            </div>
+          </div>
+
+          <button
+            id="bypassBtn"
+            type="button"
+            class="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <span id="btnLabel">Bypass</span>
+            <span id="spinner" class="spinner hidden"></span>
+          </button>
+        </div>
+        <p id="errorBox" class="mt-3 hidden rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700"></p>
+      </section>
+
+      <section class="grid gap-4 lg:grid-cols-2">
+        <div class="panel flex min-h-[28rem] flex-col rounded-2xl p-4 sm:p-5">
+          <div class="mb-3 flex items-center justify-between">
+            <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-700">AI Input</h2>
+            <button
+              id="clearBtn"
+              type="button"
+              class="text-xs font-medium text-slate-500 hover:text-slate-800"
+            >
+              Clear
+            </button>
+          </div>
+          <textarea
+            id="inputText"
+            class="min-h-0 flex-1 rounded-xl border border-stone-300 bg-stone-50 px-4 py-3 text-sm leading-6 text-slate-800 outline-none ring-teal-700/30 focus:ring-2"
+            placeholder="Paste AI-generated text here..."
+          ></textarea>
+        </div>
+
+        <div class="panel flex min-h-[28rem] flex-col rounded-2xl p-4 sm:p-5">
+          <div class="mb-3 flex items-center justify-between">
+            <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-700">
+              Humanized Output
+            </h2>
+            <button
+              id="copyBtn"
+              type="button"
+              class="rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-stone-50 disabled:opacity-50"
+              disabled
+            >
+              Copy to Clipboard
+            </button>
+          </div>
+          <textarea
+            id="outputText"
+            readonly
+            class="min-h-0 flex-1 rounded-xl border border-stone-300 bg-white px-4 py-3 text-sm leading-6 text-slate-800 outline-none"
+            placeholder="Humanized text will appear here..."
+          ></textarea>
+        </div>
+      </section>
+
+      <section class="mt-4 grid gap-4 sm:grid-cols-2">
+        <div class="panel rounded-2xl p-4 sm:p-5">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Burstiness</p>
+          <p id="burstinessScore" class="mt-2 text-3xl font-semibold text-slate-900">—</p>
+          <p class="mt-1 text-sm text-slate-500">
+            Sentence-length standard deviation. Target ≥ 8.0
+          </p>
+        </div>
+        <div class="panel rounded-2xl p-4 sm:p-5">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">AI Risk Score</p>
+          <p id="riskScore" class="mt-2 text-3xl font-semibold text-slate-900">—</p>
+          <p class="mt-1 text-sm text-slate-500">
+            Heuristic predictability estimate (0–100, lower is better)
+          </p>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      const intensityLevels = ["low", "medium", "high"];
+      const intensitySlider = document.getElementById("intensity");
+      const intensityLabel = document.getElementById("intensityLabel");
+      const inputText = document.getElementById("inputText");
+      const outputText = document.getElementById("outputText");
+      const bypassBtn = document.getElementById("bypassBtn");
+      const btnLabel = document.getElementById("btnLabel");
+      const spinner = document.getElementById("spinner");
+      const copyBtn = document.getElementById("copyBtn");
+      const clearBtn = document.getElementById("clearBtn");
+      const errorBox = document.getElementById("errorBox");
+      const burstinessScore = document.getElementById("burstinessScore");
+      const riskScore = document.getElementById("riskScore");
+
+      function currentIntensity() {
+        return intensityLevels[Number(intensitySlider.value)] || "medium";
+      }
+
+      function setLoading(isLoading) {
+        bypassBtn.disabled = isLoading;
+        spinner.classList.toggle("hidden", !isLoading);
+        btnLabel.textContent = isLoading ? "Processing..." : "Bypass";
+      }
+
+      function showError(message) {
+        errorBox.textContent = message;
+        errorBox.classList.remove("hidden");
+      }
+
+      function clearError() {
+        errorBox.textContent = "";
+        errorBox.classList.add("hidden");
+      }
+
+      intensitySlider.addEventListener("input", () => {
+        const value = currentIntensity();
+        intensityLabel.textContent = value.charAt(0).toUpperCase() + value.slice(1);
+      });
+
+      clearBtn.addEventListener("click", () => {
+        inputText.value = "";
+        outputText.value = "";
+        burstinessScore.textContent = "—";
+        riskScore.textContent = "—";
+        copyBtn.disabled = true;
+        clearError();
+      });
+
+      copyBtn.addEventListener("click", async () => {
+        if (!outputText.value) return;
+        try {
+          await navigator.clipboard.writeText(outputText.value);
+          const original = copyBtn.textContent;
+          copyBtn.textContent = "Copied";
+          setTimeout(() => {
+            copyBtn.textContent = original;
+          }, 1200);
+        } catch (err) {
+          showError("Could not copy to clipboard.");
+        }
+      });
+
+      bypassBtn.addEventListener("click", async () => {
+        clearError();
+        const text = inputText.value.trim();
+        if (!text) {
+          showError("Please paste some text first.");
+          return;
+        }
+
+        setLoading(true);
+        try {
+          const response = await fetch("/api/humanize", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              text,
+              intensity: currentIntensity(),
+            }),
+          });
+
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.detail || data.error || "Request failed.");
+          }
+
+          outputText.value = data.humanized_text || "";
+          burstinessScore.textContent =
+            typeof data.burstiness_score === "number"
+              ? data.burstiness_score.toFixed(2)
+              : "—";
+          riskScore.textContent =
+            typeof data.ai_risk_score === "number" ? data.ai_risk_score.toFixed(1) : "—";
+          copyBtn.disabled = !outputText.value;
+        } catch (err) {
+          showError(err.message || "Something went wrong.");
+        } finally {
+          setLoading(false);
+        }
+      });
+    </script>
+  </body>
+</html>
