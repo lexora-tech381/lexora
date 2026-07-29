@@ -11,10 +11,10 @@ const MAX_TEXT_LENGTH = 12000;
 // Clean, punchy human conversational inserts that don't delete structural words
 const TRANSITION_BREAKS = [
   " — and honestly, ",
-  " — which basically means ",
+  " — which basically means that ",
   " — especially since ",
   " — and frankly, ",
-  " — meaning ",
+  " — meaning that ",
 ];
 
 function programmaticHumanizeFilter(text: string): string {
@@ -66,18 +66,19 @@ function programmaticHumanizeFilter(text: string): string {
         ) {
           // Slice right up to the conjunction word
           const part1 = current.substring(0, conjunctionMatch.index).trim();
-          // Keep the conjunction word AND the rest of the text together safely
-          const part2 = current.substring(conjunctionMatch.index).trim();
+          // Strip the original matching conjunction (and, but, so, or) from the beginning of part2
+          const rawPart2 = current
+            .substring(conjunctionMatch.index + conjunctionMatch[0].length)
+            .trim();
 
-          if (part1 && part2) {
+          if (part1 && rawPart2) {
             const randomTransition =
               TRANSITION_BREAKS[
                 Math.floor(Math.random() * TRANSITION_BREAKS.length)
               ];
 
-            // Insert transition before the preserved conjunction (no lowercase mutation)
             processedSentences.push(
-              `${part1}${randomTransition}${part2}`
+              `${part1}${randomTransition}${rawPart2}`
                 .replace(/\s+/g, " ")
                 .trim(),
             );
@@ -149,6 +150,8 @@ export async function POST(req: Request) {
     - Use conversational qualifiers and structural hesitation (e.g., 'Now, looking at this...', 'Granted, it means...').
     - Speak entirely in the active voice. Drop passive descriptions.
     - Preserve natural paragraph breaks from the source structure.
+    - You must match or slightly exceed the length and depth of the original text. Do not summarize, skip examples, or compress detailed explanations.
+    - Elaborate naturally on thoughts using casual human descriptions, anecdotes, or breakdown phrasing to ensure the comprehensive depth of the input text remains completely intact.
     - Emulate the style of ${structuralStyle}. Return ONLY the raw rewritten content. No chat, no notes, no markdown headings.
 
     Text to rewrite:
