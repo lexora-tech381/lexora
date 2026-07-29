@@ -31,6 +31,16 @@ const BUZZWORD_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\bin today's fast-paced world\b/gi, "these days"],
 ];
 
+const TRANSITION_BREAKS = [
+  ", which means ",
+  ", especially since ",
+  "—and frankly, ",
+  "—mostly because ",
+  ", meaning ",
+];
+
+const COORDINATING_CONJUNCTIONS = new Set(["and", "but", "so", "or"]);
+
 function countWords(sentence: string): number {
   const matches = sentence.match(/[A-Za-z0-9']+/g);
   return matches ? matches.length : 0;
@@ -45,52 +55,71 @@ function splitIntoSentences(text: string): string[] {
     .filter(Boolean);
 }
 
-function sliceLongSentence(sentence: string): string[] {
-  const words = sentence.trim().split(/\s+/);
-  if (words.length <= 18) return [sentence.trim()];
+function cleanClause(text: string): string {
+  return text
+    .replace(/^[\s,;:—–-]+/, "")
+    .replace(/[\s,;:—–-]+$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  const conjunctions = new Set([
-    "and",
-    "but",
-    "so",
-    "or",
-    "because",
-    "while",
-    "although",
-    "when",
-    "as",
-  ]);
+function pickTransition(seed: number): string {
+  return TRANSITION_BREAKS[seed % TRANSITION_BREAKS.length];
+}
 
-  const mid = Math.floor(words.length / 2);
-  let bestIndex = -1;
-  let bestDistance = Number.POSITIVE_INFINITY;
+/**
+ * Smoothly introduce burstiness by replacing the first natural break
+ * (comma or coordinating conjunction) with an em-dash / transition phrase.
+ * Never hard-cuts mid-word or inserts a period that orphans a capital letter.
+ */
+function softenLongSentence(sentence: string, seed: number): string {
+  const trimmed = sentence.trim();
+  if (countWords(trimmed) <= 18) return trimmed;
+
+  const words = trimmed.split(/\s+/);
+  let breakIndex = -1;
+  let breakType: "comma" | "conjunction" | null = null;
 
   for (let index = 3; index < words.length - 3; index += 1) {
-    const token = words[index].toLowerCase().replace(/[^\w']/g, "");
-    if (!conjunctions.has(token)) continue;
-    const distance = Math.abs(index - mid);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      bestIndex = index;
+    const raw = words[index];
+    const normalized = raw.toLowerCase().replace(/[^\w']/g, "");
+
+    if (raw.endsWith(",")) {
+      breakIndex = index;
+      breakType = "comma";
+      break;
+    }
+
+    if (COORDINATING_CONJUNCTIONS.has(normalized)) {
+      breakIndex = index;
+      breakType = "conjunction";
+      break;
     }
   }
 
-  if (bestIndex > 0) {
-    const left = words.slice(0, bestIndex).join(" ").replace(/[,;:]+$/, "");
-    let right = words.slice(bestIndex + 1).join(" ").replace(/^[,;:]+/, "");
-    const useDash = bestIndex % 2 === 0;
-    if (useDash) {
-      return [`${left} — ${right}`];
-    }
-    right = right ? right.charAt(0).toUpperCase() + right.slice(1) : right;
-    return [`${left}.`, right];
+  if (breakIndex === -1) {
+    // No safe grammatical hinge found — leave intact to avoid broken fragments.
+    return trimmed;
   }
 
-  const cut = Math.max(5, Math.min(words.length - 4, mid + (words.length % 2 === 0 ? -2 : 2)));
-  const left = words.slice(0, cut).join(" ").replace(/[,;:]+$/, "");
-  let right = words.slice(cut).join(" ").replace(/^[,;:]+/, "");
-  right = right ? right.charAt(0).toUpperCase() + right.slice(1) : right;
-  return [`${left}.`, right];
+  const left = cleanClause(words.slice(0, breakIndex).join(" "));
+  const rightStart =
+    breakType === "conjunction" ? breakIndex + 1 : breakIndex + 1;
+  const right = cleanClause(words.slice(rightStart).join(" "));
+
+  if (!left || !right) return trimmed;
+
+  // Keep right clause lowercase when bridging with a transition/em-dash,
+  // so we never create "anxious. Disappointed" style period splits.
+  const rightJoined =
+    right.charAt(0).toLowerCase() + (right.length > 1 ? right.slice(1) : "");
+
+  if (breakType === "comma" || seed % 2 === 0) {
+    const bridge = pickTransition(seed);
+    return cleanClause(`${left}${bridge}${rightJoined}`);
+  }
+
+  return cleanClause(`${left} — ${rightJoined}`);
 }
 
 function programmaticHumanizeFilter(text: string): string {
@@ -106,25 +135,31 @@ function programmaticHumanizeFilter(text: string): string {
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
 
-  const rebuilt = paragraphs.map((paragraph) => {
+  const rebuilt = paragraphs.map((paragraph, paragraphIndex) => {
     const sentences = splitIntoSentences(paragraph);
-    const fractured: string[] = [];
+    const reshaped = sentences.map((sentence, sentenceIndex) =>
+      softenLongSentence(sentence, paragraphIndex + sentenceIndex + sentence.length),
+    );
 
-    for (const sentence of sentences) {
-      if (countWords(sentence) > 18) {
-        fractured.push(...sliceLongSentence(sentence));
-      } else {
-        fractured.push(sentence);
-      }
-    }
-
-    return fractured.join(" ").replace(/\s+/g, " ").trim();
+    return reshaped
+      .map((sentence) => cleanClause(sentence))
+      .filter(Boolean)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .replace(/\s+([,.;:!?])/g, "$1")
+      .replace(/[—–-]{2,}/g, "—")
+      .replace(/\s*—\s*/g, " — ")
+      .replace(/\s+/g, " ")
+      .trim();
   });
 
   return rebuilt
     .join("\n\n")
     .replace(/[^\S\n]{2,}/g, " ")
+    .replace(/[ \t]+$/gm, "")
     .replace(/\s+([,.;:!?])/g, "$1")
+    .replace(/(?:—\s*)+$/g, "")
+    .replace(/\s+/g, (match) => (match.includes("\n") ? match : " "))
     .trim();
 }
 
