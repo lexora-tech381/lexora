@@ -8,15 +8,6 @@ const ai = new GoogleGenAI({
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const MAX_TEXT_LENGTH = 12000;
 
-const STRUCTURAL_MODIFIERS = [
-  " — ",
-  " — a point that clarifies why ",
-  " — which in practice means ",
-  " — driven by the fact that ",
-  " — a distinction that matters because ",
-  " — an outcome tied to ",
-] as const;
-
 const CONJUNCTION_PATTERN =
   /\b(and|but|so|or|although|while|because|though)\b/gi;
 
@@ -40,35 +31,31 @@ function resolveStructuralStyle(styleKey: unknown): string {
     return EXECUTIVE_FALLBACK_PERSONA;
   }
 
-  if (normalized === "Friendly" || normalized === "Simple" || normalized === "Natural") {
+  if (
+    normalized === "Friendly" ||
+    normalized === "Simple" ||
+    normalized === "Natural"
+  ) {
     return `${ADVERSARIAL_STYLE_CORE} Write as a clear, direct corporate communicator. Prefer precise, transparent explanations while entirely bypassing machine rhythmic patterns.`;
   }
 
-  // Unknown tone/mode → never leave persona undefined
   return EXECUTIVE_FALLBACK_PERSONA;
-}
-
-function pickAlternateModifierIndex(lastUsedIndex: number): number {
-  if (STRUCTURAL_MODIFIERS.length <= 1) {
-    return 0;
-  }
-
-  let nextIndex = Math.floor(Math.random() * STRUCTURAL_MODIFIERS.length);
-  if (nextIndex === lastUsedIndex) {
-    nextIndex = (nextIndex + 1) % STRUCTURAL_MODIFIERS.length;
-  }
-
-  return nextIndex;
 }
 
 function applyVocabularyRandomization(text: string): string {
   const vocabularyMap: Array<[string, string]> = [
-    ["functions as a disciplined cognitive methodology", "operates as a structured practice"],
+    [
+      "functions as a disciplined cognitive methodology",
+      "operates as a structured practice",
+    ],
     ["optimize psychological equilibrium", "improve mental balance"],
     ["Immediate psychological stabilization", "Quick mental relief"],
     ["acute interior observation capabilities", "better self-awareness"],
     ["Longitudinal physiological benefits", "Long-term physical benefits"],
-    ["manifesting as restored circadian rhythms", "showing up as better sleep cycles"],
+    [
+      "manifesting as restored circadian rhythms",
+      "showing up as better sleep cycles",
+    ],
     ["Cognitive throughput concurrently sharpens", "Mental focus also sharpens"],
     ["exogenous operational pressures", "outside workspace pressures"],
     ["dampens amygdala reactivity", "calms the nervous system"],
@@ -176,68 +163,48 @@ function extractSentences(paragraph: string): string[] {
   return matched.map((sentence) => sentence.trim()).filter(Boolean);
 }
 
-function clauseNeedsSimpleEmDash(rawPart2: string): boolean {
-  const leading = rawPart2.trim().split(/\s+/).slice(0, 3).join(" ");
-  return /^(while|when|which|because|that|although|though|where|whereas|and|but|so|or)\b/i.test(
-    leading,
-  );
-}
-
-function clauseHasStrongVerb(rawPart2: string): boolean {
-  const cleaned = rawPart2.replace(/[.!?]+$/g, "").trim();
-  const tokenCount = cleaned.split(/\s+/).filter(Boolean).length;
-  if (tokenCount < 4) {
-    return false;
-  }
-
-  return /\b(is|are|was|were|be|been|being|has|have|had|will|would|can|could|may|might|shall|should|must|do|does|did|provides?|supports?|enables?|creates?|builds?|improves?|remains?|offers?|allows?|requires?|includes?|involves?|produces?|drives?|shapes?|reflects?|indicates?|demonstrates?|operates?|functions?|delivers?|strengthens?|reduces?|increases?|maintains?|helps?|works?|leads?)\b/i.test(
-    cleaned,
-  );
-}
-
-function findBestConjunctionSplit(
-  sentence: string,
-): { index: number; word: string; length: number } | null {
+function findConjunctionMatch(sentence: string): RegExpExecArray | null {
   CONJUNCTION_PATTERN.lastIndex = 0;
 
-  let best: { index: number; word: string; length: number } | null = null;
+  let bestMatch: RegExpExecArray | null = null;
   let bestDistance = Number.POSITIVE_INFINITY;
   const midpoint = Math.floor(sentence.length / 2);
-  let match: RegExpExecArray | null = CONJUNCTION_PATTERN.exec(sentence);
+  let conjunctionMatch: RegExpExecArray | null =
+    CONJUNCTION_PATTERN.exec(sentence);
 
-  while (match !== null) {
-    const index = match.index;
-    const word = match[1] ?? match[0];
-    const length = match[0].length;
-
-    // Require meaningful content on both sides
-    if (index > 12 && index + length < sentence.length - 12) {
-      const left = sentence.substring(0, index).trim();
-      const right = sentence.substring(index + length).trim();
+  while (conjunctionMatch !== null) {
+    if (
+      typeof conjunctionMatch.index === "number" &&
+      typeof conjunctionMatch[0] === "string" &&
+      conjunctionMatch[0].length > 0 &&
+      conjunctionMatch.index > 12 &&
+      conjunctionMatch.index + conjunctionMatch[0].length < sentence.length - 12
+    ) {
+      const left = sentence.substring(0, conjunctionMatch.index).trim();
+      const right = sentence
+        .substring(conjunctionMatch.index + conjunctionMatch[0].length)
+        .trim();
       const leftWords = left.split(/\s+/).filter(Boolean).length;
       const rightWords = right.split(/\s+/).filter(Boolean).length;
 
       if (leftWords >= 4 && rightWords >= 3) {
-        const distance = Math.abs(index - midpoint);
+        const distance = Math.abs(conjunctionMatch.index - midpoint);
         if (distance < bestDistance) {
           bestDistance = distance;
-          best = { index, word, length };
+          bestMatch = conjunctionMatch;
         }
       }
     }
 
-    match = CONJUNCTION_PATTERN.exec(sentence);
+    conjunctionMatch = CONJUNCTION_PATTERN.exec(sentence);
   }
 
-  return best;
+  return bestMatch;
 }
 
-function structuralInversionParser(
-  paragraph: string,
-  lastModifierIndexRef: { value: number },
-): string {
+function structuralInversionParser(paragraph: string): string {
   const sentences = extractSentences(paragraph);
-  const processed: string[] = [];
+  const processedSentences: string[] = [];
 
   for (let i = 0; i < sentences.length; i += 1) {
     const current = sentences[i];
@@ -247,52 +214,43 @@ function structuralInversionParser(
 
     const wordCount = current.split(/\s+/).filter(Boolean).length;
     if (wordCount <= 14) {
-      processed.push(current);
+      processedSentences.push(current);
       continue;
     }
 
-    const split = findBestConjunctionSplit(current);
-    if (!split) {
-      processed.push(current);
-      continue;
-    }
-
-    const part1 = current.substring(0, split.index).trim();
-    const rawPart2 = current.substring(split.index + split.length).trim();
-
-    if (!part1 || !rawPart2) {
-      processed.push(current);
-      continue;
-    }
-
-    let bridge = " — ";
-    const conjunctionWord = split.word.toLowerCase();
+    const conjunctionMatch = findConjunctionMatch(current);
 
     if (
-      clauseNeedsSimpleEmDash(rawPart2) ||
-      !clauseHasStrongVerb(rawPart2) ||
-      conjunctionWord === "although" ||
-      conjunctionWord === "while" ||
-      conjunctionWord === "because" ||
-      conjunctionWord === "though"
+      !conjunctionMatch ||
+      typeof conjunctionMatch.index !== "number" ||
+      typeof conjunctionMatch[0] !== "string" ||
+      conjunctionMatch[0].length === 0
     ) {
-      // Keep original conjunction to avoid verb drops / run-ons
-      bridge = ` — ${conjunctionWord} `;
-    } else {
-      const modifierIndex = pickAlternateModifierIndex(lastModifierIndexRef.value);
-      lastModifierIndexRef.value = modifierIndex;
-      bridge = STRUCTURAL_MODIFIERS[modifierIndex] ?? " — ";
+      processedSentences.push(current);
+      continue;
     }
 
-    processed.push(
-      `${part1}${bridge}${rawPart2}`
-        .replace(/\s+/g, " ")
-        .replace(/,\s*—/g, " —")
-        .trim(),
-    );
+    // Safely extract the matched conjunction STRING before case changes
+    const matchedWord = conjunctionMatch[0];
+    const part1 = current.substring(0, conjunctionMatch.index).trim();
+    const part2 = current
+      .substring(conjunctionMatch.index + matchedWord.length)
+      .trim();
+
+    if (part1 && part2) {
+      processedSentences.push(
+        `${part1} — ${matchedWord.toLowerCase().trim()} ${part2}`
+          .replace(/\s+/g, " ")
+          .replace(/,\s*—/g, " —")
+          .trim(),
+      );
+      continue;
+    }
+
+    processedSentences.push(current);
   }
 
-  return processed
+  return processedSentences
     .join(" ")
     .replace(/\s+/g, " ")
     .replace(/,\s*—/g, " —")
@@ -306,7 +264,6 @@ function programmaticHumanizeFilter(text: string): string {
   }
 
   const vocabularyShattered = applyVocabularyRandomization(source);
-  const lastModifierIndexRef = { value: -1 };
 
   const paragraphs = vocabularyShattered
     .split(/\n+/)
@@ -314,7 +271,7 @@ function programmaticHumanizeFilter(text: string): string {
     .filter(Boolean);
 
   const invertedParagraphs = paragraphs.map((paragraph) =>
-    structuralInversionParser(paragraph, lastModifierIndexRef),
+    structuralInversionParser(paragraph),
   );
 
   return invertedParagraphs
@@ -337,7 +294,6 @@ function readGeminiText(response: unknown): string {
     return maybeText;
   }
 
-  // Some SDK shapes expose text as a getter function
   if (typeof maybeText === "function") {
     try {
       const value = (maybeText as () => unknown)();
@@ -348,6 +304,22 @@ function readGeminiText(response: unknown): string {
   }
 
   return "";
+}
+
+function countParagraphs(text: string): number {
+  const paragraphs = text
+    .split(/\n\n+/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+  if (paragraphs.length > 1) {
+    return paragraphs.length;
+  }
+
+  return text
+    .split(/\n+/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean).length || 1;
 }
 
 export async function POST(req: Request) {
@@ -394,12 +366,15 @@ export async function POST(req: Request) {
           : "Professional";
 
     const systemPersona = resolveStructuralStyle(styleKey);
+    const inputParagraphCount = countParagraphs(trimmedText);
+    const inputWordCount = trimmedText.split(/\s+/).filter(Boolean).length;
 
     const prompt = `${systemPersona}
 
 CRITICAL HUMAN BYPASS LAWS:
-- You must match or slightly exceed the analytical depth and length of the original text. Do not compress information.
-- Write with unpredictable human structural flows, balancing long multi-clause insights with sharp, shorter declarations.
+- Strict Length Guard: The finalized output text must contain exactly ${inputParagraphCount} paragraphs, explicitly matching the brief, concise paragraph sizes and overall depth of the input text. Do not invent new introductory conclusions, extra explanatory padding sentences, or corporate clichés that inflate the word count.
+- Keep total length within ±10% of the input word count (${inputWordCount} words). Never summarize below that band and never pad above it.
+- Write with unpredictable human structural flows, balancing concise multi-clause thoughts with brief 5-word declarations to shatter standard machine prose loops.
 - Ensure all sophisticated corporate or academic terms are used with native fluency, avoiding linear list groups or structured conclusion summaries.
 - Never invent fictional sensory scenes, office noises, or unrelated narrative padding.
 - Return ONLY the finalized rewritten text content. Do not output chat text, notes, markdown formatting headers, or commentary.
