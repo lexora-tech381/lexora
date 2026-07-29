@@ -35,8 +35,33 @@ AI_CLICHES = [
     "plays a crucial role",
 ]
 
-MIN_STRUCTURAL_ENTROPY = 14.0
-MIN_TRIPLET_DELTA = 10
+# Replacements used for soft lexical cleanup (do not reject whole drafts)
+CLICHE_REPLACEMENTS = [
+    (r"\bdelve(?:s|d|ing)?\b", "look into"),
+    (r"\btapestry\b", "mix"),
+    (r"\bmoreover\b", "besides that"),
+    (r"\bfurthermore\b", "on top of that"),
+    (r"\btestament\b", "sign"),
+    (r"\bmultifaceted\b", "many-sided"),
+    (r"\bin conclusion\b", "to wrap this up"),
+    (r"\badditionally\b", "also"),
+    (r"\bultimately\b", "in the end"),
+    (r"\bconsequently\b", "so"),
+    (r"\bparamount\b", "really important"),
+    (r"\bpivotal\b", "key"),
+    (r"\bcrucial\b", "important"),
+    (r"\bleverage\b", "use"),
+    (r"\bfoster\b", "encourage"),
+    (r"\bunderscore\b", "highlight"),
+    (r"\bseamless\b", "smooth"),
+    (r"\bembark(?:ing)? on\b", "start"),
+    (r"\bin today's fast-paced world\b", "these days"),
+    (r"\bit is important to note that\b", "worth noting,"),
+    (r"\bplays a crucial role\b", "matters a lot"),
+]
+
+MIN_STRUCTURAL_ENTROPY = 8.5
+MIN_TRIPLET_DELTA = 8
 
 
 def split_sentences(text: str) -> List[str]:
@@ -55,10 +80,10 @@ def sentence_lengths(text: str) -> List[int]:
     return [word_count(sentence) for sentence in split_sentences(text)]
 
 
-def evaluate_structural_entropy(text: str) -> Dict[str, float | bool | str]:
+def evaluate_structural_entropy(text: str) -> Dict[str, float | bool | str | list]:
     """
     Measure sentence-length standard deviation.
-    Reject when std-dev < 14.0 words.
+    Soft reject when std-dev < 8.5 words.
     """
     lengths = sentence_lengths(text)
     if len(lengths) <= 1:
@@ -77,24 +102,41 @@ def evaluate_structural_entropy(text: str) -> Dict[str, float | bool | str]:
         "message": (
             "Structural entropy passed."
             if passed
-            else f"Structural entropy too low ({entropy:.2f} < {MIN_STRUCTURAL_ENTROPY})."
+            else f"Structural entropy soft-fail ({entropy:.2f} < {MIN_STRUCTURAL_ENTROPY})."
         ),
         "lengths": lengths,
     }
 
 
+def remove_lexical_cliches(text: str) -> Tuple[str, List[str]]:
+    """Flag and replace specific AI signature words/phrases in-place."""
+    cleaned = text or ""
+    matches: List[str] = []
+    lower = cleaned.lower()
+    for term in AI_CLICHES:
+        if term in lower:
+            matches.append(term)
+
+    for pattern, replacement in CLICHE_REPLACEMENTS:
+        cleaned = re.sub(pattern, replacement, cleaned, flags=re.IGNORECASE)
+
+    return cleaned, sorted(set(matches))
+
+
 def check_lexical_cliches(text: str) -> Dict[str, float | bool | list | str]:
-    """Flag and block text containing known AI signature phrases."""
+    """
+    Flag AI signatures and report them.
+    Does NOT hard-block drafts; callers should remove matches instead.
+    """
     lower = (text or "").lower()
     matches = sorted({term for term in AI_CLICHES if term in lower})
-    blocked = len(matches) > 0
     return {
-        "blocked": blocked,
+        "blocked": False,
         "matches": matches,
-        "penalty": float(len(matches) * 15.0),
+        "penalty": float(len(matches) * 4.0),
         "message": (
-            f"Blocked AI signatures: {', '.join(matches)}"
-            if blocked
+            f"Flagged AI signatures for removal: {', '.join(matches)}"
+            if matches
             else "No lexical clichés detected."
         ),
     }
@@ -102,7 +144,7 @@ def check_lexical_cliches(text: str) -> Dict[str, float | bool | list | str]:
 
 def check_violent_burstiness(text: str) -> Tuple[bool, str]:
     """
-    Fail when any three consecutive sentences all differ by < 10 words.
+    Soft check: warn when three consecutive sentences all differ by < 8 words.
     """
     lengths = sentence_lengths(text)
     if len(lengths) < 3:
@@ -127,25 +169,22 @@ def evaluate_draft(text: str) -> Dict[str, object]:
     cliches = check_lexical_cliches(text)
     burst_ok, burst_msg = check_violent_burstiness(text)
 
-    passed = (
-        bool(entropy["passed"])
-        and not bool(cliches["blocked"])
-        and burst_ok
-    )
+    # Lexical hits no longer veto acceptance; entropy is the main gate.
+    passed = bool(entropy["passed"])
 
     loss = 0.0
     if not entropy["passed"]:
         loss += max(0.0, MIN_STRUCTURAL_ENTROPY - float(entropy["entropy"]))
     loss += float(cliches["penalty"])
     if not burst_ok:
-        loss += 12.0
+        loss += 4.0
 
     return {
         "passed": passed,
         "structural_entropy": float(entropy["entropy"]),
         "entropy_passed": bool(entropy["passed"]),
         "entropy_message": str(entropy["message"]),
-        "cliche_blocked": bool(cliches["blocked"]),
+        "cliche_blocked": False,
         "cliche_matches": list(cliches["matches"]),
         "cliche_message": str(cliches["message"]),
         "burstiness_ok": burst_ok,

@@ -9,7 +9,7 @@ from typing import Any, Dict, List
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -95,8 +95,8 @@ async def health() -> dict:
     }
 
 
-@app.post("/api/humanize", response_model=HumanizeResponse)
-async def humanize(payload: HumanizeRequest) -> HumanizeResponse:
+@app.post("/api/humanize")
+async def humanize(payload: HumanizeRequest):
     text = payload.text.strip()
     intensity = (payload.intensity or "medium").strip().lower()
 
@@ -120,16 +120,16 @@ async def humanize(payload: HumanizeRequest) -> HumanizeResponse:
         )
     except ValueError as exc:
         console_log(f"[api] validation error: {exc}")
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return JSONResponse(status_code=400, content={"error": str(exc)})
     except RuntimeError as exc:
         console_log(f"[api] upstream error: {exc}")
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return JSONResponse(status_code=502, content={"error": str(exc)})
     except Exception as exc:  # noqa: BLE001
         console_log(f"[api] unexpected failure: {exc}")
-        raise HTTPException(
+        return JSONResponse(
             status_code=500,
-            detail="Unable to humanize text. Please try again.",
-        ) from exc
+            content={"error": str(exc)},
+        )
 
     trace_models: List[TracePass] = []
     for item in result.get("trace", []):
