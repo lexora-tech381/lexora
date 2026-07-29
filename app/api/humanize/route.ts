@@ -15,7 +15,7 @@ const TRANSITION_BREAKS = [
   " — especially since ",
   " — and frankly, ",
   " — meaning that ",
-];
+] as const;
 
 function resolveStructuralStyle(styleKey: unknown): string {
   if (styleKey === "Academic") {
@@ -28,6 +28,69 @@ function resolveStructuralStyle(styleKey: unknown): string {
 
   // Friendly, Simple, Natural, or any unrecognized selection
   return "a clear, direct communicator explaining concepts plainly without jargon.";
+}
+
+function pickAlternateTransitionIndex(lastUsedIndex: number): number {
+  if (TRANSITION_BREAKS.length <= 1) {
+    return 0;
+  }
+
+  let nextIndex = Math.floor(Math.random() * TRANSITION_BREAKS.length);
+  if (nextIndex === lastUsedIndex) {
+    nextIndex = (nextIndex + 1) % TRANSITION_BREAKS.length;
+  }
+  return nextIndex;
+}
+
+function isSafeConjunctionSplit(part1: string, rawPart2: string): boolean {
+  const part1Words = part1.split(/\s+/).filter(Boolean);
+  const part2Words = rawPart2.split(/\s+/).filter(Boolean);
+
+  // Both sides must carry enough content so verbs keep their nouns/objects
+  if (part1Words.length < 8 || part2Words.length < 6) {
+    return false;
+  }
+
+  const lastWord = part1Words[part1Words.length - 1] ?? "";
+  const firstWord = part2Words[0] ?? "";
+
+  // Avoid cutting parallel participles/gerunds: "directing and focusing"
+  const endsWithIng = /ing$/i.test(lastWord.replace(/[^\w']/g, ""));
+  const startsWithIng = /ing$/i.test(firstWord.replace(/[^\w']/g, ""));
+  if (endsWithIng && startsWithIng) {
+    return false;
+  }
+
+  return true;
+}
+
+function findSafeConjunctionMatch(
+  current: string,
+): RegExpExecArray | null {
+  const conjunctionPattern = /\s+(and|but|so|or)\s+/gi;
+  let match: RegExpExecArray | null = conjunctionPattern.exec(current);
+  let bestMatch: RegExpExecArray | null = null;
+  let bestBalance = Number.POSITIVE_INFINITY;
+  const midpoint = current.length / 2;
+
+  while (match) {
+    const matchIndex = match.index;
+    const matchLength = match[0].length;
+    const part1 = current.substring(0, matchIndex).trim();
+    const rawPart2 = current.substring(matchIndex + matchLength).trim();
+
+    if (isSafeConjunctionSplit(part1, rawPart2)) {
+      const balance = Math.abs(matchIndex - midpoint);
+      if (balance < bestBalance) {
+        bestBalance = balance;
+        bestMatch = match;
+      }
+    }
+
+    match = conjunctionPattern.exec(current);
+  }
+
+  return bestMatch;
 }
 
 function programmaticHumanizeFilter(text: string): string {
@@ -51,6 +114,9 @@ function programmaticHumanizeFilter(text: string): string {
     filteredText = filteredText.replace(regex, humanWord);
   });
 
+  // Track last transition across the whole document to prevent repetition
+  let lastTransitionIndex = -1;
+
   // 2. Process paragraph by paragraph to maintain clean essay layout
   const paragraphs = filteredText
     .split(/\n+/)
@@ -67,9 +133,9 @@ function programmaticHumanizeFilter(text: string): string {
 
       const wordCount = current.split(/\s+/).filter(Boolean).length;
 
-      // Spike burstiness only on overly-long sentences
-      if (wordCount > 18) {
-        const conjunctionMatch = /\s+(and|but|so|or)\s+/i.exec(current);
+      // Only split true long sentences
+      if (wordCount > 22) {
+        const conjunctionMatch = findSafeConjunctionMatch(current);
 
         if (
           conjunctionMatch &&
@@ -82,22 +148,21 @@ function programmaticHumanizeFilter(text: string): string {
           const matchIndex = conjunctionMatch.index;
           const matchLength = conjunctionMatch[0].length;
 
-          // Slice right up to the conjunction word
           const part1 = current.substring(0, matchIndex).trim();
-          // Strip the original matching conjunction (and, but, so, or) from part2
           const rawPart2 = current
             .substring(matchIndex + matchLength)
             .trim();
 
-          if (part1 && rawPart2) {
-            const randomTransition =
-              TRANSITION_BREAKS[
-                Math.floor(Math.random() * TRANSITION_BREAKS.length)
-              ];
+          if (part1 && rawPart2 && isSafeConjunctionSplit(part1, rawPart2)) {
+            const transitionIndex =
+              pickAlternateTransitionIndex(lastTransitionIndex);
+            lastTransitionIndex = transitionIndex;
+            const randomTransition = TRANSITION_BREAKS[transitionIndex];
 
             processedSentences.push(
               `${part1}${randomTransition}${rawPart2}`
                 .replace(/\s+/g, " ")
+                .replace(/,\s*—/g, " —")
                 .trim(),
             );
             continue;
@@ -109,7 +174,11 @@ function programmaticHumanizeFilter(text: string): string {
       processedSentences.push(current);
     }
 
-    return processedSentences.join(" ").replace(/\s+/g, " ").trim();
+    return processedSentences
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .replace(/,\s*—/g, " —")
+      .trim();
   });
 
   // 3. Rejoin structural layout paragraphs and clear loose markdown headers
@@ -117,6 +186,7 @@ function programmaticHumanizeFilter(text: string): string {
     .join("\n\n")
     .replace(/^#+\s*/gm, "")
     .replace(/\s+/g, (match) => (match.includes("\n") ? match : " "))
+    .replace(/,\s*—/g, " —")
     .replace(/[ \t]+$/gm, "")
     .trim();
 }
