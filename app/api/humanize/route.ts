@@ -19,8 +19,11 @@ const CLAUSE_TRANSITIONS = [
 
 const SIMPLE_CONJUNCTIONS = [" and ", " but ", " so ", " or "] as const;
 
+const SUBORDINATE_STARTERS =
+  /^(while|when|which|because|that|where|whereas|although|though|unless|until|after|before|since|if|as|and|but|so|or)\b/i;
+
 const ADVERSARIAL_STYLE_CORE =
-  "You are an institutional expert rewriting a document, but you must completely sabotage traditional linear essay structures. Mix core conceptual metrics with abrupt, practical field observations. Write with high structural asymmetry. Never conclude a paragraph with a summary statement. Leave paragraphs hanging on an active analytical point, and begin the next paragraph mid-thought to emulate organic human drafting. Vary sentence lengths violently. Force some paragraphs to begin with a 4-word blunt declaration, followed by a 40-word multi-clause sentence tied together by a semicolon or an em-dash. Avoid predictable transitional loops like 'Furthermore', 'Moreover', and 'In conclusion'.";
+  "You are an institutional expert rewriting a document. Completely sabotage traditional linear essay structures while remaining factual and professional. Write with high structural asymmetry. Never conclude a paragraph with a summary statement. Leave paragraphs hanging on an active analytical point drawn only from the source material. Vary sentence lengths. Force some paragraphs to begin with a short blunt declaration, followed by a longer multi-clause sentence tied together by a semicolon or an em-dash. Avoid predictable transitional loops like 'Furthermore', 'Moreover', and 'In conclusion'.";
 
 const EXECUTIVE_PROSE_LAW =
   "Write with the analytical precision of an institutional whitepaper author, but prioritize active direct verbs over passive clinical jargon. Keep the prose sophisticated, authoritative, and clean.";
@@ -172,11 +175,15 @@ function findSimpleConjunctionIndex(sentence: string): number {
   return bestIndex;
 }
 
-function rawPart2NeedsSimpleEmDash(rawPart2: string): boolean {
-  // Relative pronouns / subordinators that already carry clause glue
-  return /^(while|when|which|because|where|whereas|although|though|unless|until|after|before|since|if|as|and|but|so|or)\b/i.test(
-    rawPart2.trim(),
-  );
+function clauseNeedsSimpleConnector(rawPart2: string): boolean {
+  const leadingWindow = rawPart2.trim().split(/\s+/).slice(0, 4).join(" ");
+
+  // Catch starters and near-front subordinators: "while", "when that", "because of", etc.
+  if (SUBORDINATE_STARTERS.test(leadingWindow)) {
+    return true;
+  }
+
+  return /\b(while|when|which|because|that)\b/i.test(leadingWindow);
 }
 
 function fractureLongSentences(
@@ -204,9 +211,10 @@ function fractureLongSentences(
           firstSpace === -1 ? "" : remainder.substring(firstSpace + 1).trim();
 
         if (part1 && rawPart2) {
-          // Avoid run-ons like: "— ... when while corporate departments..."
           let transition = " — ";
-          if (!rawPart2NeedsSimpleEmDash(rawPart2)) {
+
+          // Relative / subordinate glue already present → keep grammar clean
+          if (!clauseNeedsSimpleConnector(rawPart2)) {
             const transitionIndex = pickAlternateTransitionIndex(
               lastTransitionIndexRef.value,
             );
@@ -235,28 +243,6 @@ function fractureLongSentences(
     .trim();
 }
 
-function sliceSemanticParagraphs(paragraph: string): string[] {
-  const sentences = extractSentences(paragraph);
-
-  // Only fracture dense blocks that follow Intro -> Elaboration -> Summary layouts
-  if (sentences.length < 4) {
-    return [paragraph];
-  }
-
-  // Unequal cut after the 1st or 2nd sentence so blocks never look balanced
-  const maxCut = Math.min(2, sentences.length - 2);
-  const cutAfter = 1 + Math.floor(Math.random() * maxCut);
-
-  const firstBlock = sentences.slice(0, cutAfter).join(" ").replace(/\s+/g, " ").trim();
-  const secondBlock = sentences
-    .slice(cutAfter)
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  return [firstBlock, secondBlock].filter(Boolean);
-}
-
 function programmaticHumanizeFilter(text: string): string {
   const vocabularyShattered = applyVocabularyRandomization(text);
   const lastTransitionIndexRef = { value: -1 };
@@ -266,20 +252,12 @@ function programmaticHumanizeFilter(text: string): string {
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
 
-  const fracturedParagraphs = paragraphs.map((paragraph) =>
+  // Preserve source paragraph count; only fracture long sentences in place
+  const processedParagraphs = paragraphs.map((paragraph) =>
     fractureLongSentences(paragraph, lastTransitionIndexRef),
   );
 
-  // Semantic paragraph slicer: break Intro/Elaboration/Summary blocks apart
-  const asymmetricParagraphs: string[] = [];
-  for (let i = 0; i < fracturedParagraphs.length; i += 1) {
-    const sliced = sliceSemanticParagraphs(fracturedParagraphs[i]);
-    for (let j = 0; j < sliced.length; j += 1) {
-      asymmetricParagraphs.push(sliced[j]);
-    }
-  }
-
-  return asymmetricParagraphs
+  return processedParagraphs
     .join("\n\n")
     .replace(/^#+\s*/gm, "")
     .replace(/[^\S\n]+/g, " ")
@@ -326,22 +304,38 @@ export async function POST(req: Request) {
       typeof tone === "string" && tone.length > 0 ? tone : mode,
     );
 
+    const inputParagraphs = trimmedText
+      .split(/\n+/)
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean);
+    const inputParagraphCount = Math.max(inputParagraphs.length, 1);
+    const inputSentenceCount = inputParagraphs.reduce((total, paragraph) => {
+      const sentences = paragraph.match(/[^.!?]+[.!?]+(\s|$)/g);
+      if (sentences && sentences.length > 0) {
+        return total + sentences.length;
+      }
+      return total + 1;
+    }, 0);
+    const inputWordCount = trimmedText.split(/\s+/).filter(Boolean).length;
+
     const prompt = `You are rewriting the draft below.
 
 Identity and method:
 ${structuralStyle}
 
-Non-negotiable rewrite laws:
-- Completely sabotage traditional linear essay structures.
-- Mix core conceptual metrics with abrupt, practical field observations.
-- Write with high structural asymmetry.
+CRITICAL HUMAN BYPASS LAWS:
+- Structure Requirement: You must output exactly ${inputParagraphCount} paragraphs, matching the exact paragraph count of the input text. Preserve blank-line paragraph breaks. Do not merge paragraphs. Do not invent extra paragraphs.
+- Expansion Directive: For every single sentence in the original text, you must write a fully developed, sophisticated professional counterpart. Never combine multiple sentences into one short summary. Expand on the conceptual mechanics of the input text using authoritative business whitepaper terminology to ensure the output word count matches or slightly exceeds the original.
+- Absolute Sentence-for-Sentence Structure: The input contains approximately ${inputSentenceCount} sentences and ${inputWordCount} words. Your rewrite must cover each source sentence with its own fully developed counterpart so the output stays within ±10% of ${inputWordCount} words and never collapses into a miniature summary.
+- Strict Length Guard: Never summarize. Never compress detailed explanations. Absolutely do not invent new scenarios, external settings, or fictional background descriptions.
+- Professional Boundaries: Maintain an authoritative, institutional whitepaper tone. Do not introduce narrative storytelling elements like squeaking chairs, office rooms, microwave beeps, leftover food, fluorescent lighting, or background noises. Focus entirely on humanizing the structural flow of the actual data provided.
+- Completely sabotage traditional linear essay structures without adding new facts.
+- Write with high structural asymmetry using only the source content.
 - Never conclude a paragraph with a summary statement.
-- Leave paragraphs hanging on an active analytical point, and begin the next paragraph mid-thought to emulate organic human drafting.
-- Vary sentence lengths violently. Force some paragraphs to begin with a 4-word blunt declaration, followed by a 40-word multi-clause sentence tied together by a semicolon or an em-dash.
+- Leave paragraphs hanging on an active analytical point drawn from the source, and begin the next paragraph mid-thought when that stays factual.
+- Vary sentence lengths. Begin some paragraphs with a short blunt declaration, then continue with a longer multi-clause sentence using a semicolon or em-dash.
 - Maintain sophisticated, authoritative terminology without clinical jargon density.
 - Prioritize active direct verbs over passive clinical phrasing.
-- Preserve the depth and detail of the source. Do not summarize, skip examples, or compress explanations.
-- Match or slightly exceed the original length.
 - Return ONLY the raw rewritten content. No chat, no notes, no markdown headings.
 
 Text to rewrite:
