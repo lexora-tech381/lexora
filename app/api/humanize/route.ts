@@ -372,11 +372,11 @@ export async function POST(req: Request) {
     const prompt = `${systemPersona}
 
 CRITICAL HUMAN BYPASS LAWS:
-- Strict Length Guard: The finalized output text must contain exactly ${inputParagraphCount} paragraphs, explicitly matching the brief, concise paragraph sizes and overall depth of the input text. Do not invent new introductory conclusions, extra explanatory padding sentences, or corporate clichés that inflate the word count.
-- Keep total length within ±10% of the input word count (${inputWordCount} words). Never summarize below that band and never pad above it.
+- Structural Preservation: You must output exactly the same number of paragraphs as the input text (${inputParagraphCount} paragraphs). Do not compress or truncate the core information.
+- Content Integrity: Rewrite every single concept, point, and supporting detail fully. Do not omit points to save space, and do not summarize multiple thoughts into one sentence. You must match the comprehensive depth of the input text exactly, using professional terminology. Target roughly ${inputWordCount} words (±10%).
+- Zero Fictional Padding: Focus purely on humanizing the factual flow of the text provided. Do not invent external story scenarios, background settings, or sensory descriptions (such as office environments, squeaking chairs, or external noises).
 - Write with unpredictable human structural flows, balancing concise multi-clause thoughts with brief 5-word declarations to shatter standard machine prose loops.
 - Ensure all sophisticated corporate or academic terms are used with native fluency, avoiding linear list groups or structured conclusion summaries.
-- Never invent fictional sensory scenes, office noises, or unrelated narrative padding.
 - Return ONLY the finalized rewritten text content. Do not output chat text, notes, markdown formatting headers, or commentary.
 
 Text to rewrite:
