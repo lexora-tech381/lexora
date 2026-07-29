@@ -8,7 +8,7 @@ const ai = new GoogleGenAI({
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const MAX_TEXT_LENGTH = 12000;
 
-// Clean, punchy human conversational inserts that don't delete structural words
+// Clean connectors that replace stripped conjunctions without duplicating them
 const TRANSITION_BREAKS = [
   " — and honestly, ",
   " — which basically means that ",
@@ -16,6 +16,19 @@ const TRANSITION_BREAKS = [
   " — and frankly, ",
   " — meaning that ",
 ];
+
+function resolveStructuralStyle(styleKey: unknown): string {
+  if (styleKey === "Academic") {
+    return "a published research author writing an analytical paper. Use complex vocabulary, intellectual pacing, and authoritative phrasing.";
+  }
+
+  if (styleKey === "Professional") {
+    return "a senior corporate executive writing an analytical industry whitepaper. Use precise business terminology, clear data-driven pacing, and polished corporate phrasing.";
+  }
+
+  // Friendly, Simple, Natural, or any unrecognized selection
+  return "a clear, direct communicator explaining concepts plainly without jargon.";
+}
 
 function programmaticHumanizeFilter(text: string): string {
   // 1. Dynamic replacement of explicit AI signifiers
@@ -61,14 +74,19 @@ function programmaticHumanizeFilter(text: string): string {
         if (
           conjunctionMatch &&
           typeof conjunctionMatch.index === "number" &&
+          typeof conjunctionMatch[0] === "string" &&
+          conjunctionMatch[0].length > 0 &&
           conjunctionMatch.index > 0 &&
-          conjunctionMatch.index < current.length
+          conjunctionMatch.index + conjunctionMatch[0].length <= current.length
         ) {
+          const matchIndex = conjunctionMatch.index;
+          const matchLength = conjunctionMatch[0].length;
+
           // Slice right up to the conjunction word
-          const part1 = current.substring(0, conjunctionMatch.index).trim();
-          // Strip the original matching conjunction (and, but, so, or) from the beginning of part2
+          const part1 = current.substring(0, matchIndex).trim();
+          // Strip the original matching conjunction (and, but, so, or) from part2
           const rawPart2 = current
-            .substring(conjunctionMatch.index + conjunctionMatch[0].length)
+            .substring(matchIndex + matchLength)
             .trim();
 
           if (part1 && rawPart2) {
@@ -105,7 +123,7 @@ function programmaticHumanizeFilter(text: string): string {
 
 export async function POST(req: Request) {
   try {
-    const { text, mode } = await req.json();
+    const { text, mode, tone } = await req.json();
 
     if (!text || typeof text !== "string") {
       return NextResponse.json(
@@ -136,26 +154,22 @@ export async function POST(req: Request) {
       );
     }
 
-    const structuralStyle =
-      mode === "Academic"
-        ? "an undergraduate student rushing an assignment with conversational nuance"
-        : "a casual blogger writing a stream-of-consciousness piece";
+    // UI sends Academic/Professional/Friendly via `tone`; also accept `mode` for those values
+    const structuralStyle = resolveStructuralStyle(
+      typeof tone === "string" && tone.length > 0 ? tone : mode,
+    );
 
-    const prompt = `You are a human writer draft reviewer. Completely rewrite the text provided below. 
-    
-    CRITICAL BREAK LAWS:
-    - You must completely sabotage standard machine prose patterns.
-    - Write with severe, erratic burstiness, alternating between short punchy clauses and complex thoughts.
-    - Eliminate formal transitions like 'Furthermore', 'Moreover', and 'In conclusion'.
-    - Use conversational qualifiers and structural hesitation (e.g., 'Now, looking at this...', 'Granted, it means...').
-    - Speak entirely in the active voice. Drop passive descriptions.
-    - Preserve natural paragraph breaks from the source structure.
-    - You must match or slightly exceed the length and depth of the original text. Do not summarize, skip examples, or compress detailed explanations.
-    - Elaborate naturally on thoughts using casual human descriptions, anecdotes, or breakdown phrasing to ensure the comprehensive depth of the input text remains completely intact.
-    - Emulate the style of ${structuralStyle}. Return ONLY the raw rewritten content. No chat, no notes, no markdown headings.
+    const prompt = `You are an elite human editor and writer. Your job is to rewrite the text to match the identity of ${structuralStyle}
 
-    Text to rewrite:
-    ${trimmedText}`;
+CRITICAL BREAK LAWS:
+- Ensure the text perfectly mirrors the depth and technical complexity of the input text. Do not compress information. Avoid obvious machine transitional phrases ('Furthermore', 'Moreover', 'In conclusion'), but maintain the exact level of formal sophistication required for a professional or academic setting. Use human-like varied sentence structures—mixing short assertions with complex, multi-clause explanations using semicolons and em-dashes naturally.
+- Preserve natural paragraph breaks from the source structure.
+- You must match or slightly exceed the length and depth of the original text. Do not summarize, skip examples, or compress detailed explanations.
+- Elaborate naturally on thoughts so the comprehensive depth of the input text remains completely intact.
+- Return ONLY the raw rewritten content. No chat, no notes, no markdown headings.
+
+Text to rewrite:
+${trimmedText}`;
 
     const response = await ai.models.generateContent({
       model: MODEL,
