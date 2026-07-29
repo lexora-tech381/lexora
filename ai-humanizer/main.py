@@ -1,4 +1,4 @@
-"""FastAPI server for the cryptographic AI Humanizer."""
+"""FastAPI server for the human-thought humanizer pipeline."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from humanizer import CryptographicHumanizer
+from humanizer import HumanLogicHumanizer
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
@@ -28,12 +28,9 @@ logging.basicConfig(
 logger = logging.getLogger("humanizer.api")
 
 app = FastAPI(
-    title="Cryptographic AI Humanizer",
-    description=(
-        "Multi-step pivot translation, stylistic fracture, and adversarial "
-        "burstiness verification."
-    ),
-    version="2.0.0",
+    title="Human Logic Humanizer",
+    description="Erratic human-thought rewriting with hard structural guards.",
+    version="3.0.0",
 )
 
 if STATIC_DIR.exists():
@@ -45,7 +42,7 @@ def console_log(message: str) -> None:
     print(message, flush=True)
 
 
-humanizer = CryptographicHumanizer(log_fn=console_log)
+humanizer = HumanLogicHumanizer(log_fn=console_log)
 
 
 class HumanizeRequest(BaseModel):
@@ -57,10 +54,12 @@ class TracePass(BaseModel):
     pass_number: int
     temperature: float
     top_p: float
-    burstiness_score: float
-    lexical_penalty: float
-    token_entropy: float
-    alternation_ok: bool
+    top_k: int
+    structural_adjustments: int
+    structural_entropy: float
+    cliche_blocked: bool
+    cliche_matches: List[str]
+    burstiness_ok: bool
     mathematical_loss: float
     message: str
     passed: bool
@@ -70,10 +69,11 @@ class HumanizeResponse(BaseModel):
     humanized_text: str
     burstiness_score: float
     ai_risk_score: float
-    token_entropy: float
+    structural_entropy: float
     attempts: int
     passed: bool
     mathematical_loss: float
+    structural_adjustments: int
     trace: List[TracePass]
 
 
@@ -89,9 +89,8 @@ async def index() -> FileResponse:
 async def health() -> dict:
     return {
         "status": "ok",
-        "engine": "cryptographic_v2",
+        "engine": "human_logic_v3",
         "model": humanizer.model,
-        "pivot_language": humanizer.pivot_language,
         "provider": "openrouter" if "openrouter.ai" in humanizer.base_url else "openai",
     }
 
@@ -112,10 +111,13 @@ async def humanize(payload: HumanizeRequest) -> HumanizeResponse:
         )
 
     console_log("=" * 72)
-    console_log(f"[api] /api/humanize received | chars={len(text)} | intensity={intensity}")
+    console_log(f"[api] /api/humanize | chars={len(text)} | intensity={intensity}")
 
     try:
-        result: Dict[str, Any] = humanizer.bypass_loop(text=text, intensity=intensity)
+        result: Dict[str, Any] = humanizer.run_humanization_pipeline(
+            text=text,
+            intensity=intensity,
+        )
     except ValueError as exc:
         console_log(f"[api] validation error: {exc}")
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -136,31 +138,33 @@ async def humanize(payload: HumanizeRequest) -> HumanizeResponse:
                 pass_number=int(item["pass"]),
                 temperature=float(item["temperature"]),
                 top_p=float(item["top_p"]),
-                burstiness_score=float(item["burstiness_score"]),
-                lexical_penalty=float(item["lexical_penalty"]),
-                token_entropy=float(item["token_entropy"]),
-                alternation_ok=bool(item["alternation_ok"]),
+                top_k=int(item["top_k"]),
+                structural_adjustments=int(item["structural_adjustments"]),
+                structural_entropy=float(item["structural_entropy"]),
+                cliche_blocked=bool(item["cliche_blocked"]),
+                cliche_matches=list(item.get("cliche_matches") or []),
+                burstiness_ok=bool(item["burstiness_ok"]),
                 mathematical_loss=float(item["mathematical_loss"]),
                 message=str(item["message"]),
                 passed=bool(item["passed"]),
             )
         )
         console_log(
-            "[api][trace] pass={pass_no} loss={loss} burstiness={burst} "
-            "penalty={penalty} passed={passed}".format(
+            "[api][trace] pass={pass_no} adjustments={adj} entropy={entropy} "
+            "loss={loss} passed={passed}".format(
                 pass_no=item["pass"],
+                adj=item["structural_adjustments"],
+                entropy=item["structural_entropy"],
                 loss=item["mathematical_loss"],
-                burst=item["burstiness_score"],
-                penalty=item["lexical_penalty"],
                 passed=item["passed"],
             )
         )
 
     console_log(
-        "[api] complete | attempts={attempts} final_loss={loss} burstiness={burst}".format(
+        "[api] complete | attempts={attempts} adjustments={adj} entropy={entropy}".format(
             attempts=result["attempts"],
-            loss=result["mathematical_loss"],
-            burst=result["burstiness_score"],
+            adj=result["structural_adjustments"],
+            entropy=result["structural_entropy"],
         )
     )
     console_log("=" * 72)
@@ -169,10 +173,11 @@ async def humanize(payload: HumanizeRequest) -> HumanizeResponse:
         humanized_text=result["humanized_text"],
         burstiness_score=float(result["burstiness_score"]),
         ai_risk_score=float(result["ai_risk_score"]),
-        token_entropy=float(result["token_entropy"]),
+        structural_entropy=float(result["structural_entropy"]),
         attempts=int(result["attempts"]),
         passed=bool(result["passed"]),
         mathematical_loss=float(result["mathematical_loss"]),
+        structural_adjustments=int(result["structural_adjustments"]),
         trace=trace_models,
     )
 
