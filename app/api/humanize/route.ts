@@ -22,6 +22,9 @@ const SIMPLE_CONJUNCTIONS = [" and ", " but ", " so ", " or "] as const;
 const SUBORDINATE_STARTERS =
   /^(while|when|which|because|that|where|whereas|although|though|unless|until|after|before|since|if|as|and|but|so|or)\b/i;
 
+const STRONG_VERB_PATTERN =
+  /\b(is|are|was|were|be|been|being|has|have|had|will|would|can|could|may|might|shall|should|must|do|does|did|provides?|supports?|enables?|creates?|builds?|improves?|remains?|offers?|allows?|requires?|includes?|involves?|produces?|drives?|shapes?|reflects?|indicates?|demonstrates?|operates?|functions?|delivers?|strengthens?|reduces?|increases?|maintains?|establishes?|ensures?|yields?|generates?|helps?|works?|leads?|depends?|matters?)\b/i;
+
 const ADVERSARIAL_STYLE_CORE =
   "You are an institutional expert rewriting a document. Completely sabotage traditional linear essay structures while remaining factual and professional. Write with high structural asymmetry. Never conclude a paragraph with a summary statement. Leave paragraphs hanging on an active analytical point drawn only from the source material. Vary sentence lengths. Force some paragraphs to begin with a short blunt declaration, followed by a longer multi-clause sentence tied together by a semicolon or an em-dash. Avoid predictable transitional loops like 'Furthermore', 'Moreover', and 'In conclusion'.";
 
@@ -178,12 +181,43 @@ function findSimpleConjunctionIndex(sentence: string): number {
 function clauseNeedsSimpleConnector(rawPart2: string): boolean {
   const leadingWindow = rawPart2.trim().split(/\s+/).slice(0, 4).join(" ");
 
-  // Catch starters and near-front subordinators: "while", "when that", "because of", etc.
   if (SUBORDINATE_STARTERS.test(leadingWindow)) {
     return true;
   }
 
   return /\b(while|when|which|because|that)\b/i.test(leadingWindow);
+}
+
+function clauseHasStrongVerb(rawPart2: string): boolean {
+  const cleaned = rawPart2.replace(/[.!?]+$/g, "").trim();
+  const tokenCount = cleaned.split(/\s+/).filter(Boolean).length;
+
+  // Noun-phrase tails like "sustained quiet reflection" lack clause force
+  if (tokenCount < 5) {
+    return false;
+  }
+
+  return STRONG_VERB_PATTERN.test(cleaned);
+}
+
+function resolveTransitionBridge(
+  conjunctionWord: string,
+  rawPart2: string,
+  lastTransitionIndexRef: { value: number },
+): string {
+  const isComplexTail =
+    clauseNeedsSimpleConnector(rawPart2) || !clauseHasStrongVerb(rawPart2);
+
+  // Keep original conjunction with a clean em-dash when grammar is already dense
+  if (isComplexTail) {
+    return ` — ${conjunctionWord} `;
+  }
+
+  const transitionIndex = pickAlternateTransitionIndex(
+    lastTransitionIndexRef.value,
+  );
+  lastTransitionIndexRef.value = transitionIndex;
+  return CLAUSE_TRANSITIONS[transitionIndex];
 }
 
 function fractureLongSentences(
@@ -199,28 +233,33 @@ function fractureLongSentences(
       continue;
     }
 
-    const words = current.split(" ").filter(Boolean);
-    if (words.length > 18) {
+    const words = current.split(/\s+/).filter(Boolean);
+    if (words.length > 16) {
       const conjunctionIndex = findSimpleConjunctionIndex(current);
 
       if (conjunctionIndex > 0) {
         const part1 = current.substring(0, conjunctionIndex).trim();
+        // Capture the full remainder so nothing after the conjunction is dropped
         const remainder = current.substring(conjunctionIndex).trim();
-        const firstSpace = remainder.indexOf(" ");
-        const rawPart2 =
-          firstSpace === -1 ? "" : remainder.substring(firstSpace + 1).trim();
+        const remainderTokens = remainder.split(/\s+/).filter(Boolean);
+        const conjunctionWord = (remainderTokens[0] ?? "")
+          .replace(/[^\w']/g, "")
+          .toLowerCase();
+        const rawPart2 = remainderTokens.slice(1).join(" ").trim();
 
-        if (part1 && rawPart2) {
-          let transition = " — ";
-
-          // Relative / subordinate glue already present → keep grammar clean
-          if (!clauseNeedsSimpleConnector(rawPart2)) {
-            const transitionIndex = pickAlternateTransitionIndex(
-              lastTransitionIndexRef.value,
-            );
-            lastTransitionIndexRef.value = transitionIndex;
-            transition = CLAUSE_TRANSITIONS[transitionIndex];
-          }
+        if (
+          part1 &&
+          rawPart2 &&
+          (conjunctionWord === "and" ||
+            conjunctionWord === "but" ||
+            conjunctionWord === "so" ||
+            conjunctionWord === "or")
+        ) {
+          const transition = resolveTransitionBridge(
+            conjunctionWord,
+            rawPart2,
+            lastTransitionIndexRef,
+          );
 
           processedSentences.push(
             `${part1}${transition}${rawPart2}`
@@ -243,16 +282,20 @@ function fractureLongSentences(
     .trim();
 }
 
+function splitPreservedParagraphs(text: string): string[] {
+  // Strict double-newline split preserves Gemini's paragraph layout
+  return text
+    .split(/\n\n+/)
+    .map((paragraph) => paragraph.replace(/\n+/g, " ").trim())
+    .filter(Boolean);
+}
+
 function programmaticHumanizeFilter(text: string): string {
   const vocabularyShattered = applyVocabularyRandomization(text);
   const lastTransitionIndexRef = { value: -1 };
 
-  const paragraphs = vocabularyShattered
-    .split(/\n+/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean);
+  const paragraphs = splitPreservedParagraphs(vocabularyShattered);
 
-  // Preserve source paragraph count; only fracture long sentences in place
   const processedParagraphs = paragraphs.map((paragraph) =>
     fractureLongSentences(paragraph, lastTransitionIndexRef),
   );
@@ -304,10 +347,7 @@ export async function POST(req: Request) {
       typeof tone === "string" && tone.length > 0 ? tone : mode,
     );
 
-    const inputParagraphs = trimmedText
-      .split(/\n+/)
-      .map((paragraph) => paragraph.trim())
-      .filter(Boolean);
+    const inputParagraphs = splitPreservedParagraphs(trimmedText);
     const inputParagraphCount = Math.max(inputParagraphs.length, 1);
     const inputSentenceCount = inputParagraphs.reduce((total, paragraph) => {
       const sentences = paragraph.match(/[^.!?]+[.!?]+(\s|$)/g);
@@ -324,7 +364,7 @@ Identity and method:
 ${structuralStyle}
 
 CRITICAL HUMAN BYPASS LAWS:
-- Structure Requirement: You must output exactly ${inputParagraphCount} paragraphs, matching the exact paragraph count of the input text. Preserve blank-line paragraph breaks. Do not merge paragraphs. Do not invent extra paragraphs.
+- Structure Requirement: You must output exactly ${inputParagraphCount} paragraphs, matching the exact paragraph count of the input text. Separate paragraphs with a blank line (double newline). Do not merge paragraphs. Do not invent extra paragraphs.
 - Expansion Directive: For every single sentence in the original text, you must write a fully developed, sophisticated professional counterpart. Never combine multiple sentences into one short summary. Expand on the conceptual mechanics of the input text using authoritative business whitepaper terminology to ensure the output word count matches or slightly exceeds the original.
 - Absolute Sentence-for-Sentence Structure: The input contains approximately ${inputSentenceCount} sentences and ${inputWordCount} words. Your rewrite must cover each source sentence with its own fully developed counterpart so the output stays within ±10% of ${inputWordCount} words and never collapses into a miniature summary.
 - Strict Length Guard: Never summarize. Never compress detailed explanations. Absolutely do not invent new scenarios, external settings, or fictional background descriptions.
