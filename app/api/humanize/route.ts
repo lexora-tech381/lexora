@@ -20,10 +20,10 @@ const CLAUSE_TRANSITIONS = [
 const SIMPLE_CONJUNCTIONS = [" and ", " but ", " so ", " or "] as const;
 
 const ADVERSARIAL_STYLE_CORE =
-  "You are a senior institutional researcher rewriting a draft for an executive journal. You must maintain sophisticated, formal terminology but completely destroy standard, linear machine prose loops. Use asymmetric clause placements, vary sentence lengths aggressively (alternating short dynamic facts with multi-clause compound sentences using semicolons), and avoid predictable transitional triplets or rigid summaries at the end of paragraphs. Avoid predictable transitional loops like 'Furthermore', 'Moreover', and 'In conclusion'.";
+  "You are an institutional expert rewriting a document, but you must completely sabotage traditional linear essay structures. Mix core conceptual metrics with abrupt, practical field observations. Write with high structural asymmetry. Never conclude a paragraph with a summary statement. Leave paragraphs hanging on an active analytical point, and begin the next paragraph mid-thought to emulate organic human drafting. Vary sentence lengths violently. Force some paragraphs to begin with a 4-word blunt declaration, followed by a 40-word multi-clause sentence tied together by a semicolon or an em-dash. Avoid predictable transitional loops like 'Furthermore', 'Moreover', and 'In conclusion'.";
 
 const EXECUTIVE_PROSE_LAW =
-  "Write with the analytical precision of an institutional whitepaper author, but prioritize active direct verbs over passive clinical jargon. Use varied sentence architectures—mixing brief 5-word declarations with asymmetric compound paragraphs to mirror true human executive prose patterns.";
+  "Write with the analytical precision of an institutional whitepaper author, but prioritize active direct verbs over passive clinical jargon. Keep the prose sophisticated, authoritative, and clean.";
 
 function resolveStructuralStyle(styleKey: unknown): string {
   if (styleKey === "Academic") {
@@ -133,6 +133,15 @@ function applyVocabularyRandomization(text: string): string {
   return randomized;
 }
 
+function extractSentences(paragraph: string): string[] {
+  const matched = paragraph.match(/[^.!?]+[.!?]+(\s|$)/g);
+  if (!matched || matched.length === 0) {
+    return [paragraph.trim()].filter(Boolean);
+  }
+
+  return matched.map((sentence) => sentence.trim()).filter(Boolean);
+}
+
 function findSimpleConjunctionIndex(sentence: string): number {
   let bestIndex = -1;
   let bestDistance = Number.POSITIVE_INFINITY;
@@ -148,7 +157,6 @@ function findSimpleConjunctionIndex(sentence: string): number {
         break;
       }
 
-      // Prefer a mid-sentence break with content on both sides
       if (foundAt > 20 && foundAt < sentence.length - 20) {
         const distance = Math.abs(foundAt - midpoint);
         if (distance < bestDistance) {
@@ -168,7 +176,7 @@ function fractureLongSentences(
   paragraph: string,
   lastTransitionIndexRef: { value: number },
 ): string {
-  const sentences = paragraph.match(/[^.!?]+[.!?]+(\s|$)/g) || [paragraph];
+  const sentences = extractSentences(paragraph);
   const processedSentences: string[] = [];
 
   for (let i = 0; i < sentences.length; i += 1) {
@@ -186,9 +194,7 @@ function fractureLongSentences(
         const remainder = current.substring(conjunctionIndex).trim();
         const firstSpace = remainder.indexOf(" ");
         const rawPart2 =
-          firstSpace === -1
-            ? ""
-            : remainder.substring(firstSpace + 1).trim();
+          firstSpace === -1 ? "" : remainder.substring(firstSpace + 1).trim();
 
         if (part1 && rawPart2) {
           const transitionIndex = pickAlternateTransitionIndex(
@@ -218,6 +224,28 @@ function fractureLongSentences(
     .trim();
 }
 
+function sliceSemanticParagraphs(paragraph: string): string[] {
+  const sentences = extractSentences(paragraph);
+
+  // Only fracture dense blocks that follow Intro -> Elaboration -> Summary layouts
+  if (sentences.length < 4) {
+    return [paragraph];
+  }
+
+  // Unequal cut after the 1st or 2nd sentence so blocks never look balanced
+  const maxCut = Math.min(2, sentences.length - 2);
+  const cutAfter = 1 + Math.floor(Math.random() * maxCut);
+
+  const firstBlock = sentences.slice(0, cutAfter).join(" ").replace(/\s+/g, " ").trim();
+  const secondBlock = sentences
+    .slice(cutAfter)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return [firstBlock, secondBlock].filter(Boolean);
+}
+
 function programmaticHumanizeFilter(text: string): string {
   const vocabularyShattered = applyVocabularyRandomization(text);
   const lastTransitionIndexRef = { value: -1 };
@@ -227,11 +255,20 @@ function programmaticHumanizeFilter(text: string): string {
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
 
-  const processedParagraphs = paragraphs.map((paragraph) =>
+  const fracturedParagraphs = paragraphs.map((paragraph) =>
     fractureLongSentences(paragraph, lastTransitionIndexRef),
   );
 
-  return processedParagraphs
+  // Semantic paragraph slicer: break Intro/Elaboration/Summary blocks apart
+  const asymmetricParagraphs: string[] = [];
+  for (let i = 0; i < fracturedParagraphs.length; i += 1) {
+    const sliced = sliceSemanticParagraphs(fracturedParagraphs[i]);
+    for (let j = 0; j < sliced.length; j += 1) {
+      asymmetricParagraphs.push(sliced[j]);
+    }
+  }
+
+  return asymmetricParagraphs
     .join("\n\n")
     .replace(/^#+\s*/gm, "")
     .replace(/\s+/g, (match) => (match.includes("\n") ? match : " "))
@@ -283,15 +320,16 @@ Identity and method:
 ${structuralStyle}
 
 Non-negotiable rewrite laws:
-- Maintain sophisticated, formal terminology without clinical jargon density.
+- Completely sabotage traditional linear essay structures.
+- Mix core conceptual metrics with abrupt, practical field observations.
+- Write with high structural asymmetry.
+- Never conclude a paragraph with a summary statement.
+- Leave paragraphs hanging on an active analytical point, and begin the next paragraph mid-thought to emulate organic human drafting.
+- Vary sentence lengths violently. Force some paragraphs to begin with a 4-word blunt declaration, followed by a 40-word multi-clause sentence tied together by a semicolon or an em-dash.
+- Maintain sophisticated, authoritative terminology without clinical jargon density.
 - Prioritize active direct verbs over passive clinical phrasing.
-- Completely destroy standard, linear machine prose loops.
-- Use asymmetric clause placements.
-- Vary sentence lengths aggressively: mix brief 5-word declarations with multi-clause compound sentences using semicolons.
-- Avoid predictable transitional triplets or rigid summaries at the end of paragraphs.
 - Preserve the depth and detail of the source. Do not summarize, skip examples, or compress explanations.
 - Match or slightly exceed the original length.
-- Preserve natural paragraph breaks from the source structure.
 - Return ONLY the raw rewritten content. No chat, no notes, no markdown headings.
 
 Text to rewrite:
