@@ -13,14 +13,14 @@ const ADVERSARIAL_STYLE_CORE =
 
 function resolveStructuralStyle(styleKey: unknown): string {
   if (styleKey === "Academic") {
-    return `${ADVERSARIAL_STYLE_CORE} Write as an expert academic scholar delivering an investigative analysis. Keep terminology highly sophisticated, dense, and intellectually authoritative without conforming to standard textbook templates.`;
+    return ${ADVERSARIAL_STYLE_CORE} Write as an expert academic scholar delivering an investigative analysis. Keep terminology highly sophisticated, dense, and intellectually authoritative without conforming to standard textbook templates.;
   }
 
   if (styleKey === "Professional") {
-    return `${ADVERSARIAL_STYLE_CORE} Write as a senior corporate analyst delivering a critical market whitepaper. Maintain highly polished, business-aware terminology, but introduce natural structural asymmetry throughout the prose.`;
+    return ${ADVERSARIAL_STYLE_CORE} Write as a senior corporate analyst delivering a critical market whitepaper. Maintain highly polished, business-aware terminology, but introduce natural structural asymmetry throughout the prose.;
   }
 
-  return `${ADVERSARIAL_STYLE_CORE} Write as a clear, direct corporate communicator. Prefer precise, transparent explanations while entirely bypassing machine rhythmic patterns.`;
+  return ${ADVERSARIAL_STYLE_CORE} Write as a clear, direct corporate communicator. Prefer precise, transparent explanations while entirely bypassing machine rhythmic patterns.;
 }
 
 function applyVocabularyRandomization(text: string): string {
@@ -67,6 +67,12 @@ function applyVocabularyRandomization(text: string): string {
     ["in the realm of", "in"],
     ["shed light on", "clarify"],
     ["key takeaway", "main point"],
+    ["mental training method", "structured mental practice"],
+    ["cognitive wellness", "mental well-being"],
+    ["deliberately center", "consciously focus"],
+    ["attentional mechanisms", "mental focus"],
+    ["substantial reinforcement", "clear backing"],
+    ["tangible physiological dividends", "clear physical benefits"],
   ];
 
   let randomized = text;
@@ -79,17 +85,51 @@ function applyVocabularyRandomization(text: string): string {
   return randomized;
 }
 
+function structuralInversionParser(paragraph: string): string {
+  const sentences = paragraph.match(/[^.!?]+[.!?]+(\s|$)/g) || [paragraph];
+  const processedSentences: string[] = [];
+
+  for (let i = 0; i < sentences.length; i++) {
+    let current = sentences[i].trim();
+    if (!current) continue;
+
+    const wordCount = current.split(/\s+/).
+    filter(Boolean).length;
+
+    // Apply strict structural breaks to sentences that are too long/predictable
+    if (wordCount > 15) {
+      // Find safe transition spots on commas or conjunction markers
+      const breakMatch = /,\s+(and|but|so|or)\s+/i.exec(current);
+      if (breakMatch && typeof breakMatch.index === "number") {
+        const part1 = current.substring(0, breakMatch.index).trim();
+        const part2 = current.substring(breakMatch.index + breakMatch[0].length).trim();
+        
+        if (part1 && part2) {
+          // Replace standard comma groupings with an unpredictable em-dash
+          processedSentences.push(`${part1} — and ${part2}`);
+          continue;
+        }
+      }
+    }
+    processedSentences.push(current);
+  }
+
+  return processedSentences.join(" ").replace(/\s+/g, " ").trim();
+}
+
 function programmaticHumanizeFilter(text: string): string {
-  // Apply vocabulary randomization matrix
   const vocabularyShattered = applyVocabularyRandomization(text);
 
-  // Re-map paragraphs to preserve structural whitepaper formatting
   const paragraphs = vocabularyShattered
     .split(/\n+/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
 
-  return paragraphs
+  const invertedParagraphs = paragraphs.map((paragraph) => {
+    return structuralInversionParser(paragraph);
+  });
+
+  return invertedParagraphs
     .join("\n\n")
     .replace(/^#+\s*/gm, "")
     .replace(/\s+/g, (match) => (match.includes("\n") ? match : " "))
@@ -102,37 +142,24 @@ export async function POST(req: Request) {
     const { text, mode, tone } = await req.json();
 
     if (!text || typeof text !== "string") {
-      return NextResponse.json(
-        { error: "Please enter some text." },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Please enter some text." }, { status: 400 });
     }
 
     const trimmedText = text.trim();
     if (!trimmedText) {
-      return NextResponse.json(
-        { error: "Please enter some text." },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Please enter some text." }, { status: 400 });
     }
 
     if (trimmedText.length > MAX_TEXT_LENGTH) {
-      return NextResponse.json(
-        { error: "Text is too long." },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Text is too long." }, { status: 400 });
     }
 
     if (!process.env.GEMINI_API_KEY) {
-      return NextResponse.json(
-        { error: "The rewriting service is temporarily unavailable." },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: "The rewriting service is temporarily unavailable." }, { status: 500 });
     }
 
-    // UI sends Academic/Professional via `tone`; fall back to `mode`
     const systemPersona = resolveStructuralStyle(
-      typeof tone === "string" && tone.length > 0 ? tone : mode,
+      typeof tone === "string" && tone.length > 0 ? tone : mode
     );
 
     const prompt = `${systemPersona}
@@ -158,20 +185,14 @@ ${trimmedText}`;
     const rawResult = response.text;
 
     if (!rawResult || !rawResult.trim()) {
-      return NextResponse.json(
-        { error: "Empty response from Gemini engine." },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: "Empty response from Gemini engine." }, { status: 500 });
     }
 
     const humanizedOutput = programmaticHumanizeFilter(rawResult.trim());
     return NextResponse.json({ result: humanizedOutput });
   } catch (err: unknown) {
     console.error("API Route Error Context:", err);
-    const message =
-      err instanceof Error
-        ? err.message
-        : "An internal processing error occurred.";
+    const message = err instanceof Error ? err.message : "An internal processing error occurred.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
