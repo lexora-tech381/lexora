@@ -8,8 +8,15 @@ const ai = new GoogleGenAI({
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const MAX_TEXT_LENGTH = 12000;
 
-const CONJUNCTION_PATTERN =
-  /\b(and|but|so|or|although|while|because|though)\b/gi;
+const CONJUNCTION_PATTERN = /\b(and|but|so|or|while|because)\b/gi;
+
+const PARAGRAPH_TRANSITION_INSERTS = [
+  " — a metric that explicitly reveals why ",
+  " — which, from a tactical execution angle, means that ",
+  " — a shift driven heavily by the fact that ",
+  " — an operational factor that becomes evident when ",
+  " — showing a clean correlation to the way ",
+] as const;
 
 const ADVERSARIAL_STYLE_CORE =
   "You are an elite institutional expert delivering an analytical critique of a draft. You must actively break linear machine prose loops and predictable textbook symmetry. Never organize arguments symmetrically. Mix core definitions with practical, sharp conclusions. Use highly volatile sentence variance—alternating between short structural assertions and dense compound thoughts wrapped in semicolons. Avoid predictable transitional loops like 'Furthermore', 'Moreover', and 'In conclusion'.";
@@ -43,7 +50,23 @@ function resolveStructuralStyle(styleKey: unknown): string {
 }
 
 function applyVocabularyRandomization(text: string): string {
+  // Longer high-risk expansion markers first, then broader corporate/academic scrub list
   const vocabularyMap: Array<[string, string]> = [
+    ["which in turn enables", "directly allowing"],
+    ["a reality highlighting why", "highlighting exactly why"],
+    ["an analytical reality", "a core operational detail"],
+    ["an outcome directly correlated with", "a result linked right to"],
+    ["from an execution standpoint", "in day-to-day execution"],
+    ["fundamentally indicating that", "effectively showing that"],
+    ["tangible physiological dividends", "clear physical benefits"],
+    ["substantial reinforcement", "clear backing"],
+    ["systematically enhance", "measurably improve"],
+    ["it is important to note", "worth noting"],
+    ["the practice trains", "this routine helps"],
+    ["consequently", "as a result"],
+    ["moreover", "on top of that"],
+    ["furthermore", "also"],
+    ["ultimately", "at the end of the day"],
     [
       "functions as a disciplined cognitive methodology",
       "operates as a structured practice",
@@ -77,18 +100,14 @@ function applyVocabularyRandomization(text: string): string {
     ["cognitive enhancement", "heightened focus"],
     ["cognitive resilience", "mental endurance"],
     ["effectively mitigate", "measurably reduce"],
-    ["systematically enhance", "measurably improve"],
     ["substantial support", "clear empirical backing"],
-    ["it is important to note", "worth noting"],
     ["due to the fact that", "because"],
     ["a significant number of", "many"],
     ["has the potential to", "can"],
     ["in the realm of", "in"],
     ["shed light on", "clarify"],
     ["key takeaway", "central implication"],
-    ["In conclusion", "Ultimately"],
-    ["Furthermore", "Also"],
-    ["Moreover", "Beyond that"],
+    ["In conclusion", "At the end of the day"],
     ["In summary", "In short"],
     ["Tapestry of", "Interplay of"],
     ["Testament to", "Evidence of"],
@@ -125,7 +144,6 @@ function applyVocabularyRandomization(text: string): string {
     ["crucial role", "central part"],
     ["best practices", "proven approaches"],
     ["going forward", "from here"],
-    ["at the end of the day", "in practical terms"],
     ["move the needle", "create measurable change"],
     ["low-hanging fruit", "easier wins"],
     ["deep dive", "closer look"],
@@ -202,9 +220,31 @@ function findConjunctionMatch(sentence: string): RegExpExecArray | null {
   return bestMatch;
 }
 
+function pickUnusedTransitionInsert(
+  usedInsertIndexes: Set<number>,
+): string | null {
+  const availableIndexes: number[] = [];
+
+  for (let i = 0; i < PARAGRAPH_TRANSITION_INSERTS.length; i += 1) {
+    if (!usedInsertIndexes.has(i)) {
+      availableIndexes.push(i);
+    }
+  }
+
+  if (availableIndexes.length === 0) {
+    return null;
+  }
+
+  const selectedSlot = Math.floor(Math.random() * availableIndexes.length);
+  const selectedIndex = availableIndexes[selectedSlot];
+  usedInsertIndexes.add(selectedIndex);
+  return PARAGRAPH_TRANSITION_INSERTS[selectedIndex];
+}
+
 function structuralInversionParser(paragraph: string): string {
   const sentences = extractSentences(paragraph);
   const processedSentences: string[] = [];
+  const usedInsertIndexes = new Set<number>();
 
   for (let i = 0; i < sentences.length; i += 1) {
     const current = sentences[i];
@@ -230,16 +270,23 @@ function structuralInversionParser(paragraph: string): string {
       continue;
     }
 
-    // Safely extract the matched conjunction STRING before case changes
     const matchedWord = conjunctionMatch[0];
     const part1 = current.substring(0, conjunctionMatch.index).trim();
     const part2 = current
       .substring(conjunctionMatch.index + matchedWord.length)
       .trim();
 
-    if (part1 && part2) {
+    if (!part1 || !part2) {
+      processedSentences.push(current);
+      continue;
+    }
+
+    const randomInsert = pickUnusedTransitionInsert(usedInsertIndexes);
+
+    // Never reuse the same transition twice in one paragraph block
+    if (randomInsert) {
       processedSentences.push(
-        `${part1} — ${matchedWord.toLowerCase().trim()} ${part2}`
+        `${part1}${randomInsert}${part2}`
           .replace(/\s+/g, " ")
           .replace(/,\s*—/g, " —")
           .trim(),
@@ -247,7 +294,13 @@ function structuralInversionParser(paragraph: string): string {
       continue;
     }
 
-    processedSentences.push(current);
+    // Exhausted unique inserts for this paragraph: keep original conjunction cleanly
+    processedSentences.push(
+      `${part1} — ${matchedWord.toLowerCase().trim()} ${part2}`
+        .replace(/\s+/g, " ")
+        .replace(/,\s*—/g, " —")
+        .trim(),
+    );
   }
 
   return processedSentences
