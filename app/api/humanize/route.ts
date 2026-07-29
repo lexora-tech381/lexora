@@ -382,8 +382,6 @@ function buildParagraphPrompt(
   totalParagraphs: number,
 ): string {
   const paragraphWordCount = paragraphText.split(/\s+/).filter(Boolean).length;
-  const minWordCount = Math.max(1, Math.floor(paragraphWordCount * 0.95));
-  const maxWordCount = Math.ceil(paragraphWordCount * 1.05);
 
   return `${systemPersona}
 
@@ -392,8 +390,8 @@ You are rewriting paragraph ${paragraphIndex + 1} of ${totalParagraphs} from a l
 CRITICAL HUMAN BYPASS LAWS:
 - Structural Preservation: Output exactly one paragraph. Do not compress or truncate the core information.
 - Content Integrity: Rewrite every single concept, point, and supporting detail fully. Do not omit points to save space, and do not summarize multiple thoughts into one sentence. You must match the comprehensive depth of the input text exactly, using professional terminology.
-- Strict 1-to-1 Mapping: You must rewrite this paragraph by matching its original sentence count and length profile exactly. Do not add extra background context, do not explain the concepts further, and do not introduce new transition arguments.
-- Length Guard: Your rewritten output paragraph must closely match the word count of the provided text below (±5% variance). Keep the phrasing concise, direct, and authoritative without adding wordy corporate padding. Stay between ${minWordCount} and ${maxWordCount} words (input is ${paragraphWordCount} words).
+- Equal Density Phrasing: You must rewrite this isolated paragraph by fully preserving every single factual detail, idea, and concept from the source text. Do not compress multiple sentences into short summaries, and do not delete any points.
+- Length Stability: Your rewritten output paragraph must match the comprehensive depth, sentence flow, and approximate size of the provided input text block exactly (Aim for a 1:1 length ratio). Maintain a highly polished, professional vocabulary without introducing fictional scenarios or shortening the descriptions. Target about ${paragraphWordCount} words.
 - Zero Fictional Padding: Focus purely on humanizing the factual flow of the text provided. Do not invent external story scenarios, background settings, or sensory descriptions (such as office environments, squeaking chairs, or external noises).
 - Write with unpredictable human structural flows, balancing concise multi-clause thoughts with brief 5-word declarations to shatter standard machine prose loops.
 - Ensure all sophisticated corporate or academic terms are used with native fluency, avoiding linear list groups or structured conclusion summaries.
