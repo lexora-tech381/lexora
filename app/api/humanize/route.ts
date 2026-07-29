@@ -8,6 +8,8 @@ const ai = new GoogleGenAI({
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const MAX_TEXT_LENGTH = 12000;
 
+const CONJUNCTION_PATTERN = /\b(and|but|so|or|while|because)\b/gi;
+
 const PARAGRAPH_TRANSITION_INSERTS = [
   " — a metric that explicitly reveals why ",
   " — which, from a tactical execution angle, means that ",
@@ -179,148 +181,31 @@ function extractSentences(paragraph: string): string[] {
   return matched.map((sentence) => sentence.trim()).filter(Boolean);
 }
 
-const NOUN_STOPWORDS = new Set([
-  "the",
-  "a",
-  "an",
-  "of",
-  "to",
-  "in",
-  "on",
-  "for",
-  "with",
-  "by",
-  "from",
-  "as",
-  "at",
-  "into",
-  "over",
-  "after",
-  "before",
-  "is",
-  "are",
-  "was",
-  "were",
-  "be",
-  "been",
-  "being",
-  "this",
-  "that",
-  "these",
-  "those",
-  "it",
-  "its",
-  "their",
-  "our",
-  "your",
-  "and",
-  "but",
-  "or",
-  "so",
-  "because",
-  "while",
-  "when",
-  "which",
-  "who",
-  "whom",
-  "what",
-  "how",
-  "than",
-  "then",
-  "also",
-  "not",
-  "no",
-  "can",
-  "could",
-  "will",
-  "would",
-  "may",
-  "might",
-  "must",
-  "shall",
-  "should",
-  "do",
-  "does",
-  "did",
-  "have",
-  "has",
-  "had",
-  "very",
-  "more",
-  "most",
-  "less",
-  "least",
-  "such",
-  "other",
-  "another",
-  "each",
-  "every",
-  "both",
-  "few",
-  "many",
-  "much",
-  "some",
-  "any",
-  "all",
-]);
+function findConjunctionMatch(sentence: string): RegExpExecArray | null {
+  CONJUNCTION_PATTERN.lastIndex = 0;
 
-function countDistinctNouns(text: string): number {
-  const tokens = text
-    .replace(/[.!?]+$/g, "")
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean);
-  const nouns = new Set<string>();
-
-  for (let i = 0; i < tokens.length; i += 1) {
-    const cleaned = tokens[i].replace(/[^\w']/g, "");
-    if (cleaned.length < 3) {
-      continue;
-    }
-    if (NOUN_STOPWORDS.has(cleaned)) {
-      continue;
-    }
-    nouns.add(cleaned);
-  }
-
-  return nouns.size;
-}
-
-function clauseHasStrongVerb(text: string): boolean {
-  return /\b(is|are|was|were|be|been|being|has|have|had|will|would|can|could|may|might|shall|should|must|do|does|did|provides?|supports?|enables?|creates?|builds?|improves?|remains?|offers?|allows?|requires?|includes?|involves?|produces?|drives?|shapes?|reflects?|indicates?|demonstrates?|operates?|functions?|delivers?|strengthens?|reduces?|increases?|maintains?|helps?|works?|leads?|promotes?|enhances?|trains?)\b/i.test(
-    text,
-  );
-}
-
-function findSafeSpacedConjunctionMatch(
-  sentence: string,
-): RegExpExecArray | null {
-  // Strict space-wrapped coordinating conjunctions only (avoids list-item cuts)
-  const spacedConjunctionPattern = /\s+(and|but|so|or|because)\s+/gi;
-  let conjunctionMatch: RegExpExecArray | null =
-    spacedConjunctionPattern.exec(sentence);
   let bestMatch: RegExpExecArray | null = null;
   let bestDistance = Number.POSITIVE_INFINITY;
   const midpoint = Math.floor(sentence.length / 2);
+  let conjunctionMatch: RegExpExecArray | null =
+    CONJUNCTION_PATTERN.exec(sentence);
 
   while (conjunctionMatch !== null) {
     if (
       typeof conjunctionMatch.index === "number" &&
       typeof conjunctionMatch[0] === "string" &&
-      conjunctionMatch[0].length > 0
+      conjunctionMatch[0].length > 0 &&
+      conjunctionMatch.index > 12 &&
+      conjunctionMatch.index + conjunctionMatch[0].length < sentence.length - 12
     ) {
-      const part1 = sentence.substring(0, conjunctionMatch.index).trim();
-      const part2 = sentence
+      const left = sentence.substring(0, conjunctionMatch.index).trim();
+      const right = sentence
         .substring(conjunctionMatch.index + conjunctionMatch[0].length)
         .trim();
-      const part1Words = part1.split(/\s+/).filter(Boolean).length;
-      const part2Words = part2.split(/\s+/).filter(Boolean).length;
+      const leftWords = left.split(/\s+/).filter(Boolean).length;
+      const rightWords = right.split(/\s+/).filter(Boolean).length;
 
-      if (
-        part1Words >= 6 &&
-        part2Words >= 6 &&
-        countDistinctNouns(part2) >= 2
-      ) {
+      if (leftWords >= 4 && rightWords >= 3) {
         const distance = Math.abs(conjunctionMatch.index - midpoint);
         if (distance < bestDistance) {
           bestDistance = distance;
@@ -329,7 +214,7 @@ function findSafeSpacedConjunctionMatch(
       }
     }
 
-    conjunctionMatch = spacedConjunctionPattern.exec(sentence);
+    conjunctionMatch = CONJUNCTION_PATTERN.exec(sentence);
   }
 
   return bestMatch;
@@ -373,7 +258,7 @@ function structuralInversionParser(paragraph: string): string {
       continue;
     }
 
-    const conjunctionMatch = findSafeSpacedConjunctionMatch(current);
+    const conjunctionMatch = findConjunctionMatch(current);
 
     if (
       !conjunctionMatch ||
@@ -385,35 +270,21 @@ function structuralInversionParser(paragraph: string): string {
       continue;
     }
 
-    const matchedSpan = conjunctionMatch[0];
-    const matchedWord = (conjunctionMatch[1] ?? matchedSpan)
-      .toLowerCase()
-      .trim();
+    const matchedWord = conjunctionMatch[0];
     const part1 = current.substring(0, conjunctionMatch.index).trim();
     const part2 = current
-      .substring(conjunctionMatch.index + matchedSpan.length)
+      .substring(conjunctionMatch.index + matchedWord.length)
       .trim();
 
-    const part1Words = part1.split(/\s+/).filter(Boolean).length;
-    const part2Words = part2.split(/\s+/).filter(Boolean).length;
-    const part2NounCount = countDistinctNouns(part2);
-
-    // Skip short parallel lists / three-item fragments entirely
-    if (
-      !part1 ||
-      !part2 ||
-      part1Words < 6 ||
-      part2Words < 6 ||
-      part2NounCount < 2
-    ) {
+    if (!part1 || !part2) {
       processedSentences.push(current);
       continue;
     }
 
     const randomInsert = pickUnusedTransitionInsert(usedInsertIndexes);
 
-    // Only use polished inserts when part2 is a full clause with a verb
-    if (randomInsert && clauseHasStrongVerb(part2)) {
+    // Never reuse the same transition twice in one paragraph block
+    if (randomInsert) {
       processedSentences.push(
         `${part1}${randomInsert}${part2}`
           .replace(/\s+/g, " ")
@@ -423,9 +294,9 @@ function structuralInversionParser(paragraph: string): string {
       continue;
     }
 
-    // Preserve original conjunction with a clean em-dash to keep verb links intact
+    // Exhausted unique inserts for this paragraph: keep original conjunction cleanly
     processedSentences.push(
-      `${part1} — ${matchedWord} ${part2}`
+      `${part1} — ${matchedWord.toLowerCase().trim()} ${part2}`
         .replace(/\s+/g, " ")
         .replace(/,\s*—/g, " —")
         .trim(),
@@ -641,3 +512,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+
