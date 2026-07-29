@@ -179,6 +179,119 @@ function extractSentences(paragraph: string): string[] {
   return matched.map((sentence) => sentence.trim()).filter(Boolean);
 }
 
+const NOUN_STOPWORDS = new Set([
+  "the",
+  "a",
+  "an",
+  "of",
+  "to",
+  "in",
+  "on",
+  "for",
+  "with",
+  "by",
+  "from",
+  "as",
+  "at",
+  "into",
+  "over",
+  "after",
+  "before",
+  "is",
+  "are",
+  "was",
+  "were",
+  "be",
+  "been",
+  "being",
+  "this",
+  "that",
+  "these",
+  "those",
+  "it",
+  "its",
+  "their",
+  "our",
+  "your",
+  "and",
+  "but",
+  "or",
+  "so",
+  "because",
+  "while",
+  "when",
+  "which",
+  "who",
+  "whom",
+  "what",
+  "how",
+  "than",
+  "then",
+  "also",
+  "not",
+  "no",
+  "can",
+  "could",
+  "will",
+  "would",
+  "may",
+  "might",
+  "must",
+  "shall",
+  "should",
+  "do",
+  "does",
+  "did",
+  "have",
+  "has",
+  "had",
+  "very",
+  "more",
+  "most",
+  "less",
+  "least",
+  "such",
+  "other",
+  "another",
+  "each",
+  "every",
+  "both",
+  "few",
+  "many",
+  "much",
+  "some",
+  "any",
+  "all",
+]);
+
+function countDistinctNouns(text: string): number {
+  const tokens = text
+    .replace(/[.!?]+$/g, "")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  const nouns = new Set<string>();
+
+  for (let i = 0; i < tokens.length; i += 1) {
+    const cleaned = tokens[i].replace(/[^\w']/g, "");
+    if (cleaned.length < 3) {
+      continue;
+    }
+    if (NOUN_STOPWORDS.has(cleaned)) {
+      continue;
+    }
+    nouns.add(cleaned);
+  }
+
+  return nouns.size;
+}
+
+function clauseHasStrongVerb(text: string): boolean {
+  return /\b(is|are|was|were|be|been|being|has|have|had|will|would|can|could|may|might|shall|should|must|do|does|did|provides?|supports?|enables?|creates?|builds?|improves?|remains?|offers?|allows?|requires?|includes?|involves?|produces?|drives?|shapes?|reflects?|indicates?|demonstrates?|operates?|functions?|delivers?|strengthens?|reduces?|increases?|maintains?|helps?|works?|leads?|promotes?|enhances?|trains?)\b/i.test(
+    text,
+  );
+}
+
 function findSafeSpacedConjunctionMatch(
   sentence: string,
 ): RegExpExecArray | null {
@@ -203,8 +316,11 @@ function findSafeSpacedConjunctionMatch(
       const part1Words = part1.split(/\s+/).filter(Boolean).length;
       const part2Words = part2.split(/\s+/).filter(Boolean).length;
 
-      // Skip short list fragments / parallel noun groups
-      if (part1Words >= 4 && part2Words >= 4) {
+      if (
+        part1Words >= 6 &&
+        part2Words >= 6 &&
+        countDistinctNouns(part2) >= 2
+      ) {
         const distance = Math.abs(conjunctionMatch.index - midpoint);
         if (distance < bestDistance) {
           bestDistance = distance;
@@ -269,28 +385,35 @@ function structuralInversionParser(paragraph: string): string {
       continue;
     }
 
-    const matchedWord = conjunctionMatch[0];
+    const matchedSpan = conjunctionMatch[0];
+    const matchedWord = (conjunctionMatch[1] ?? matchedSpan)
+      .toLowerCase()
+      .trim();
     const part1 = current.substring(0, conjunctionMatch.index).trim();
     const part2 = current
-      .substring(conjunctionMatch.index + matchedWord.length)
+      .substring(conjunctionMatch.index + matchedSpan.length)
       .trim();
 
     const part1Words = part1.split(/\s+/).filter(Boolean).length;
     const part2Words = part2.split(/\s+/).filter(Boolean).length;
+    const part2NounCount = countDistinctNouns(part2);
 
-    // Leave short list halves alone to prevent punctuation drops in noun groups
-    if (!part1 || !part2 || part1Words < 4 || part2Words < 4) {
+    // Skip short parallel lists / three-item fragments entirely
+    if (
+      !part1 ||
+      !part2 ||
+      part1Words < 6 ||
+      part2Words < 6 ||
+      part2NounCount < 2
+    ) {
       processedSentences.push(current);
       continue;
     }
 
     const randomInsert = pickUnusedTransitionInsert(usedInsertIndexes);
-    const conjunctionToken = (conjunctionMatch[1] ?? matchedWord)
-      .toLowerCase()
-      .trim();
 
-    // Never reuse the same transition twice in one paragraph block
-    if (randomInsert) {
+    // Only use polished inserts when part2 is a full clause with a verb
+    if (randomInsert && clauseHasStrongVerb(part2)) {
       processedSentences.push(
         `${part1}${randomInsert}${part2}`
           .replace(/\s+/g, " ")
@@ -300,9 +423,9 @@ function structuralInversionParser(paragraph: string): string {
       continue;
     }
 
-    // Exhausted unique inserts for this paragraph: keep original conjunction cleanly
+    // Preserve original conjunction with a clean em-dash to keep verb links intact
     processedSentences.push(
-      `${part1} — ${conjunctionToken} ${part2}`
+      `${part1} — ${matchedWord} ${part2}`
         .replace(/\s+/g, " ")
         .replace(/,\s*—/g, " —")
         .trim(),
