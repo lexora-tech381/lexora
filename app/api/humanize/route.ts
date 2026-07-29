@@ -382,10 +382,8 @@ function buildParagraphPrompt(
   totalParagraphs: number,
 ): string {
   const paragraphWordCount = paragraphText.split(/\s+/).filter(Boolean).length;
-  const targetWordCount = Math.max(
-    paragraphWordCount + 1,
-    Math.ceil(paragraphWordCount * 1.18),
-  );
+  const minWordCount = Math.max(1, Math.floor(paragraphWordCount * 0.95));
+  const maxWordCount = Math.ceil(paragraphWordCount * 1.05);
 
   return `${systemPersona}
 
@@ -394,8 +392,8 @@ You are rewriting paragraph ${paragraphIndex + 1} of ${totalParagraphs} from a l
 CRITICAL HUMAN BYPASS LAWS:
 - Structural Preservation: Output exactly one paragraph. Do not compress or truncate the core information.
 - Content Integrity: Rewrite every single concept, point, and supporting detail fully. Do not omit points to save space, and do not summarize multiple thoughts into one sentence. You must match the comprehensive depth of the input text exactly, using professional terminology.
-- Strict Analytical Expansion: You must ensure that your rewritten output contains slightly MORE explanatory depth than the input provided. Do not combine sentences. For every short thought, elaborate on its institutional execution or professional impact using dense, sophisticated terminology.
-- Word Count Target: Make a conscious effort to increase the verbal elaboration by roughly 15-20% compared to the text block below. Use comprehensive phrasing to describe the metrics, outcomes, and workflows to guarantee the word count does not compress. Aim for about ${targetWordCount} words (input is ${paragraphWordCount} words).
+- Strict 1-to-1 Mapping: You must rewrite this paragraph by matching its original sentence count and length profile exactly. Do not add extra background context, do not explain the concepts further, and do not introduce new transition arguments.
+- Length Guard: Your rewritten output paragraph must closely match the word count of the provided text below (±5% variance). Keep the phrasing concise, direct, and authoritative without adding wordy corporate padding. Stay between ${minWordCount} and ${maxWordCount} words (input is ${paragraphWordCount} words).
 - Zero Fictional Padding: Focus purely on humanizing the factual flow of the text provided. Do not invent external story scenarios, background settings, or sensory descriptions (such as office environments, squeaking chairs, or external noises).
 - Write with unpredictable human structural flows, balancing concise multi-clause thoughts with brief 5-word declarations to shatter standard machine prose loops.
 - Ensure all sophisticated corporate or academic terms are used with native fluency, avoiding linear list groups or structured conclusion summaries.
