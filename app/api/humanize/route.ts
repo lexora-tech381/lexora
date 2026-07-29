@@ -8,29 +8,33 @@ const ai = new GoogleGenAI({
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const MAX_TEXT_LENGTH = 12000;
 
-// High-level professional transitions that maintain executive prose authority
 const CLAUSE_TRANSITIONS = [
   " — an analytical reality highlighting why ",
   " — which, from an execution standpoint, implies that ",
   " — driven primarily by the fact that ",
   " — a structural factor that becomes clear when ",
-  " — fundamentally indicating that ",
+  " — which effectively points to ",
   " — an outcome directly correlated with the reality that ",
 ] as const;
 
+const SIMPLE_CONJUNCTIONS = [" and ", " but ", " so ", " or "] as const;
+
 const ADVERSARIAL_STYLE_CORE =
-  "You are a senior institutional researcher rewriting a draft for an executive journal. You must maintain sophisticated, formal terminology but completely destroy standard, linear machine prose loops. Use asymmetric clause placements, vary sentence lengths aggressively (alternating short dynamic facts with multi-clause compound sentences using semicolons), and avoid predictable transitional triplets or rigid summaries at the end of paragraphs. Never organize arguments symmetrically. Mix core definitions with practical, sharp conclusions. Avoid predictable transitional loops like 'Furthermore', 'Moreover', and 'In conclusion'.";
+  "You are a senior institutional researcher rewriting a draft for an executive journal. You must maintain sophisticated, formal terminology but completely destroy standard, linear machine prose loops. Use asymmetric clause placements, vary sentence lengths aggressively (alternating short dynamic facts with multi-clause compound sentences using semicolons), and avoid predictable transitional triplets or rigid summaries at the end of paragraphs. Avoid predictable transitional loops like 'Furthermore', 'Moreover', and 'In conclusion'.";
+
+const EXECUTIVE_PROSE_LAW =
+  "Write with the analytical precision of an institutional whitepaper author, but prioritize active direct verbs over passive clinical jargon. Use varied sentence architectures—mixing brief 5-word declarations with asymmetric compound paragraphs to mirror true human executive prose patterns.";
 
 function resolveStructuralStyle(styleKey: unknown): string {
   if (styleKey === "Academic") {
-    return `${ADVERSARIAL_STYLE_CORE} Write as an expert academic scholar delivering an investigative analysis. Keep terminology highly sophisticated, dense, and intellectually authoritative without conforming to standard textbook templates.`;
+    return `${ADVERSARIAL_STYLE_CORE} ${EXECUTIVE_PROSE_LAW} Write as an expert academic scholar delivering an investigative analysis. Keep terminology authoritative without clinical density or textbook templates.`;
   }
 
   if (styleKey === "Professional") {
-    return `${ADVERSARIAL_STYLE_CORE} Write as a senior corporate analyst delivering a critical market whitepaper. Maintain highly polished, business-aware terminology, but introduce natural structural asymmetry throughout the prose.`;
+    return `${ADVERSARIAL_STYLE_CORE} ${EXECUTIVE_PROSE_LAW} Write as a senior corporate analyst delivering a critical market whitepaper. Maintain polished business terminology with natural structural asymmetry.`;
   }
 
-  return `${ADVERSARIAL_STYLE_CORE} Write as a clear, direct corporate communicator. Prefer precise, transparent explanations while entirely bypassing machine rhythmic patterns.`;
+  return `${ADVERSARIAL_STYLE_CORE} Write as a clear, direct corporate communicator. Prefer precise, transparent explanations while bypassing machine rhythmic patterns.`;
 }
 
 function pickAlternateTransitionIndex(lastUsedIndex: number): number {
@@ -47,21 +51,46 @@ function pickAlternateTransitionIndex(lastUsedIndex: number): number {
 }
 
 function applyVocabularyRandomization(text: string): string {
+  // Longer phrases first so multi-word clinical markers win over shorter overlaps
   const vocabularyMap: Array<[string, string]> = [
+    [
+      "functions as a disciplined cognitive methodology",
+      "operates as a structured practice",
+    ],
+    ["optimize psychological equilibrium", "improve mental balance"],
+    ["Immediate psychological stabilization", "Quick mental relief"],
+    ["acute interior observation capabilities", "better self-awareness"],
+    ["Longitudinal physiological benefits", "Long-term physical benefits"],
+    [
+      "manifesting as restored circadian rhythms",
+      "showing up as better sleep cycles",
+    ],
+    ["Cognitive throughput concurrently sharpens", "Mental focus also sharpens"],
+    ["exogenous operational pressures", "outside workspace pressures"],
+    ["dampens amygdala reactivity", "calms the nervous system"],
+    ["enduring stress mitigation", "lasting stress reduction"],
+    ["neurocognitive conditioning", "mental conditioning"],
+    ["sustained executive attention", "close attention"],
+    ["metacognitive restructuring", "mental shifts"],
+    ["physiological downregulation", "physical relaxation"],
+    ["systematic introspection", "deep reflection"],
+    ["present-moment phenomena", "the task at hand"],
+    ["attentional regulation", "mental focus"],
+    ["measurable enhancements", "clear improvements"],
+    ["sleep architecture", "sleep quality"],
+    ["fundamentally indicating that", "which effectively points to"],
     ["effectively mitigate", "measurably reduce"],
-    ["cognitive enhancement", "heightened cognitive performance"],
-    ["cognitive resilience", "sustained cognitive endurance"],
-    ["fundamentally", "at its core"],
-    ["individuals", "participants"],
-    ["discipline", "practice"],
-    ["mitigate", "temper"],
-    ["induce", "prompt"],
-    ["advantageous", "strategically useful"],
-    ["simultaneously", "at the same time"],
-    ["nurtures", "reinforces"],
-    ["nurture", "reinforce"],
-    ["fosters", "builds"],
-    ["foster", "build"],
+    ["cognitive enhancement", "heightened focus"],
+    ["cognitive resilience", "mental endurance"],
+    ["systematically enhance", "measurably improve"],
+    ["substantial support", "clear empirical backing"],
+    ["it is important to note", "worth noting"],
+    ["due to the fact that", "because"],
+    ["a significant number of", "many"],
+    ["has the potential to", "can"],
+    ["in the realm of", "in"],
+    ["shed light on", "clarify"],
+    ["key takeaway", "central implication"],
     ["In conclusion", "Ultimately"],
     ["Furthermore", "Also"],
     ["Moreover", "Beyond that"],
@@ -69,13 +98,18 @@ function applyVocabularyRandomization(text: string): string {
     ["Tapestry of", "Interplay of"],
     ["Testament to", "Evidence of"],
     ["Delve into", "Examine"],
-    ["systematically enhance", "measurably improve"],
-    ["substantial support", "clear empirical backing"],
-    ["it is important to note", "worth noting"],
+    ["simultaneously", "at the same time"],
+    ["fundamentally", "at its core"],
+    ["advantageous", "strategically useful"],
+    ["individuals", "participants"],
+    ["discipline", "practice"],
+    ["mitigate", "temper"],
+    ["induce", "prompt"],
+    ["nurtures", "reinforces"],
+    ["nurture", "reinforce"],
+    ["fosters", "builds"],
+    ["foster", "build"],
     ["in order to", "to"],
-    ["due to the fact that", "because"],
-    ["a significant number of", "many"],
-    ["has the potential to", "can"],
     ["leverage", "apply"],
     ["utilize", "use"],
     ["utilizes", "uses"],
@@ -87,9 +121,6 @@ function applyVocabularyRandomization(text: string): string {
     ["synergy", "coordination"],
     ["plethora of", "many"],
     ["a myriad of", "many"],
-    ["in the realm of", "in"],
-    ["shed light on", "clarify"],
-    ["key takeaway", "central implication"],
   ];
 
   let randomized = text;
@@ -102,58 +133,35 @@ function applyVocabularyRandomization(text: string): string {
   return randomized;
 }
 
-function isSafeConjunctionSplit(part1: string, rawPart2: string): boolean {
-  const part1Words = part1.split(/\s+/).filter(Boolean);
-  const part2Words = rawPart2.split(/\s+/).filter(Boolean);
+function findSimpleConjunctionIndex(sentence: string): number {
+  let bestIndex = -1;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  const midpoint = Math.floor(sentence.length / 2);
 
-  if (part1Words.length < 5 || part2Words.length < 4) {
-    return false;
-  }
+  for (let i = 0; i < SIMPLE_CONJUNCTIONS.length; i += 1) {
+    const conjunction = SIMPLE_CONJUNCTIONS[i];
+    let searchFrom = 0;
 
-  const lastWord = (part1Words[part1Words.length - 1] ?? "").replace(
-    /[^\w']/g,
-    "",
-  );
-  const firstWord = (part2Words[0] ?? "").replace(/[^\w']/g, "");
+    while (searchFrom < sentence.length) {
+      const foundAt = sentence.indexOf(conjunction, searchFrom);
+      if (foundAt === -1) {
+        break;
+      }
 
-  if (/ing$/i.test(lastWord) && /ing$/i.test(firstWord)) {
-    return false;
-  }
-
-  return true;
-}
-
-function findSafeConjunctionMatch(current: string): RegExpExecArray | null {
-  const conjunctionPattern = /\s+(and|but|so|or)\s+/gi;
-  let match: RegExpExecArray | null = conjunctionPattern.exec(current);
-  let bestMatch: RegExpExecArray | null = null;
-  let bestBalance = Number.POSITIVE_INFINITY;
-  const midpoint = current.length / 2;
-
-  while (match) {
-    if (
-      typeof match.index === "number" &&
-      typeof match[0] === "string" &&
-      match[0].length > 0
-    ) {
-      const matchIndex = match.index;
-      const matchLength = match[0].length;
-      const part1 = current.substring(0, matchIndex).trim();
-      const rawPart2 = current.substring(matchIndex + matchLength).trim();
-
-      if (isSafeConjunctionSplit(part1, rawPart2)) {
-        const balance = Math.abs(matchIndex - midpoint);
-        if (balance < bestBalance) {
-          bestBalance = balance;
-          bestMatch = match;
+      // Prefer a mid-sentence break with content on both sides
+      if (foundAt > 20 && foundAt < sentence.length - 20) {
+        const distance = Math.abs(foundAt - midpoint);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestIndex = foundAt;
         }
       }
-    }
 
-    match = conjunctionPattern.exec(current);
+      searchFrom = foundAt + conjunction.length;
+    }
   }
 
-  return bestMatch;
+  return bestIndex;
 }
 
 function fractureLongSentences(
@@ -169,25 +177,20 @@ function fractureLongSentences(
       continue;
     }
 
-    const wordCount = current.split(/\s+/).filter(Boolean).length;
+    const words = current.split(" ").filter(Boolean);
+    if (words.length > 18) {
+      const conjunctionIndex = findSimpleConjunctionIndex(current);
 
-    if (wordCount > 16) {
-      const conjunctionMatch = findSafeConjunctionMatch(current);
+      if (conjunctionIndex > 0) {
+        const part1 = current.substring(0, conjunctionIndex).trim();
+        const remainder = current.substring(conjunctionIndex).trim();
+        const firstSpace = remainder.indexOf(" ");
+        const rawPart2 =
+          firstSpace === -1
+            ? ""
+            : remainder.substring(firstSpace + 1).trim();
 
-      if (
-        conjunctionMatch &&
-        typeof conjunctionMatch.index === "number" &&
-        typeof conjunctionMatch[0] === "string" &&
-        conjunctionMatch[0].length > 0 &&
-        conjunctionMatch.index > 0 &&
-        conjunctionMatch.index + conjunctionMatch[0].length <= current.length
-      ) {
-        const matchIndex = conjunctionMatch.index;
-        const matchLength = conjunctionMatch[0].length;
-        const part1 = current.substring(0, matchIndex).trim();
-        const rawPart2 = current.substring(matchIndex + matchLength).trim();
-
-        if (part1 && rawPart2 && isSafeConjunctionSplit(part1, rawPart2)) {
+        if (part1 && rawPart2) {
           const transitionIndex = pickAlternateTransitionIndex(
             lastTransitionIndexRef.value,
           );
@@ -280,12 +283,12 @@ Identity and method:
 ${structuralStyle}
 
 Non-negotiable rewrite laws:
-- Maintain sophisticated, formal terminology throughout.
+- Maintain sophisticated, formal terminology without clinical jargon density.
+- Prioritize active direct verbs over passive clinical phrasing.
 - Completely destroy standard, linear machine prose loops.
 - Use asymmetric clause placements.
-- Vary sentence lengths aggressively: alternate short dynamic facts with multi-clause compound sentences using semicolons.
+- Vary sentence lengths aggressively: mix brief 5-word declarations with multi-clause compound sentences using semicolons.
 - Avoid predictable transitional triplets or rigid summaries at the end of paragraphs.
-- Do not use casual slang, brain-dump framing, or unpolished colloquial filler.
 - Preserve the depth and detail of the source. Do not summarize, skip examples, or compress explanations.
 - Match or slightly exceed the original length.
 - Preserve natural paragraph breaks from the source structure.
