@@ -8,16 +8,17 @@ const ai = new GoogleGenAI({
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const MAX_TEXT_LENGTH = 12000;
 
+// Clean, punchy human conversational inserts that don't delete structural words
 const TRANSITION_BREAKS = [
-  ", which means ",
-  ", especially since ",
-  "—and frankly, ",
-  "—mostly because ",
-  ", meaning ",
+  " — and honestly, ",
+  " — which basically means ",
+  " — especially since ",
+  " — and frankly, ",
+  " — meaning ",
 ];
 
 function programmaticHumanizeFilter(text: string): string {
-  // 1. Dynamic replacement of AI signifiers
+  // 1. Dynamic replacement of explicit AI signifiers
   const replacements: { [key: string]: string } = {
     "In conclusion": "Ultimately",
     Furthermore: "Also",
@@ -37,15 +38,14 @@ function programmaticHumanizeFilter(text: string): string {
     filteredText = filteredText.replace(regex, humanWord);
   });
 
-  // 2. Process paragraph by paragraph to preserve layout
+  // 2. Process paragraph by paragraph to maintain clean essay layout
   const paragraphs = filteredText
     .split(/\n+/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
 
   const processedParagraphs = paragraphs.map((paragraph) => {
-    const sentences =
-      paragraph.match(/[^.!?]+[.!?]+(\s|$)/g) || [paragraph];
+    const sentences = paragraph.match(/[^.!?]+[.!?]+(\s|$)/g) || [paragraph];
     const processedSentences: string[] = [];
 
     for (let i = 0; i < sentences.length; i += 1) {
@@ -54,7 +54,7 @@ function programmaticHumanizeFilter(text: string): string {
 
       const wordCount = current.split(/\s+/).filter(Boolean).length;
 
-      // Only split long sentences, and only on safe conjunction phrases
+      // Spike burstiness only on overly-long sentences
       if (wordCount > 18) {
         const conjunctionMatch = /\s+(and|but|so|or)\s+/i.exec(current);
 
@@ -62,26 +62,22 @@ function programmaticHumanizeFilter(text: string): string {
           conjunctionMatch &&
           typeof conjunctionMatch.index === "number" &&
           conjunctionMatch.index > 0 &&
-          conjunctionMatch.index + conjunctionMatch[0].length < current.length
+          conjunctionMatch.index < current.length
         ) {
-          const part1 = current
-            .substring(0, conjunctionMatch.index)
-            .trim();
-          const part2 = current
-            .substring(conjunctionMatch.index + conjunctionMatch[0].length)
-            .trim();
+          // Slice right up to the conjunction word
+          const part1 = current.substring(0, conjunctionMatch.index).trim();
+          // Keep the conjunction word AND the rest of the text together safely
+          const part2 = current.substring(conjunctionMatch.index).trim();
 
           if (part1 && part2) {
             const randomTransition =
               TRANSITION_BREAKS[
                 Math.floor(Math.random() * TRANSITION_BREAKS.length)
               ];
-            const right =
-              part2.charAt(0).toLowerCase() +
-              (part2.length > 1 ? part2.slice(1) : "");
 
+            // Insert transition before the preserved conjunction (no lowercase mutation)
             processedSentences.push(
-              `${part1}${randomTransition}${right}`
+              `${part1}${randomTransition}${part2}`
                 .replace(/\s+/g, " ")
                 .trim(),
             );
@@ -90,14 +86,14 @@ function programmaticHumanizeFilter(text: string): string {
         }
       }
 
-      // No safe conjunction found — leave the sentence alone
+      // Safe fallback: keep sentence as-is if no natural conjunction break point is found
       processedSentences.push(current);
     }
 
     return processedSentences.join(" ").replace(/\s+/g, " ").trim();
   });
 
-  // 3. Rejoin paragraphs and strip accidental markdown headers
+  // 3. Rejoin structural layout paragraphs and clear loose markdown headers
   return processedParagraphs
     .join("\n\n")
     .replace(/^#+\s*/gm, "")
