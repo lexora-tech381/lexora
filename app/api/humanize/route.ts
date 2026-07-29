@@ -306,20 +306,50 @@ function readGeminiText(response: unknown): string {
   return "";
 }
 
-function countParagraphs(text: string): number {
-  const paragraphs = text
+function splitInputParagraphs(text: string): string[] {
+  const doubleNewlineParagraphs = text
     .split(/\n\n+/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
 
-  if (paragraphs.length > 1) {
-    return paragraphs.length;
+  if (doubleNewlineParagraphs.length > 1) {
+    return doubleNewlineParagraphs;
   }
 
   return text
     .split(/\n+/)
     .map((paragraph) => paragraph.trim())
-    .filter(Boolean).length || 1;
+    .filter(Boolean);
+}
+
+function buildParagraphPrompt(
+  systemPersona: string,
+  paragraphText: string,
+  paragraphIndex: number,
+  totalParagraphs: number,
+): string {
+  const paragraphWordCount = paragraphText.split(/\s+/).filter(Boolean).length;
+  const targetWordCount = Math.max(
+    paragraphWordCount + 1,
+    Math.ceil(paragraphWordCount * 1.18),
+  );
+
+  return `${systemPersona}
+
+You are rewriting paragraph ${paragraphIndex + 1} of ${totalParagraphs} from a larger document. Preserve this as exactly one paragraph.
+
+CRITICAL HUMAN BYPASS LAWS:
+- Structural Preservation: Output exactly one paragraph. Do not compress or truncate the core information.
+- Content Integrity: Rewrite every single concept, point, and supporting detail fully. Do not omit points to save space, and do not summarize multiple thoughts into one sentence. You must match the comprehensive depth of the input text exactly, using professional terminology.
+- Strict Analytical Expansion: You must ensure that your rewritten output contains slightly MORE explanatory depth than the input provided. Do not combine sentences. For every short thought, elaborate on its institutional execution or professional impact using dense, sophisticated terminology.
+- Word Count Target: Make a conscious effort to increase the verbal elaboration by roughly 15-20% compared to the text block below. Use comprehensive phrasing to describe the metrics, outcomes, and workflows to guarantee the word count does not compress. Aim for about ${targetWordCount} words (input is ${paragraphWordCount} words).
+- Zero Fictional Padding: Focus purely on humanizing the factual flow of the text provided. Do not invent external story scenarios, background settings, or sensory descriptions (such as office environments, squeaking chairs, or external noises).
+- Write with unpredictable human structural flows, balancing concise multi-clause thoughts with brief 5-word declarations to shatter standard machine prose loops.
+- Ensure all sophisticated corporate or academic terms are used with native fluency, avoiding linear list groups or structured conclusion summaries.
+- Return ONLY the finalized rewritten paragraph content. Do not output chat text, notes, markdown formatting headers, or commentary.
+
+Text block to rewrite:
+${paragraphText}`;
 }
 
 export async function POST(req: Request) {
@@ -366,32 +396,46 @@ export async function POST(req: Request) {
           : "Professional";
 
     const systemPersona = resolveStructuralStyle(styleKey);
-    const inputParagraphCount = countParagraphs(trimmedText);
-    const inputWordCount = trimmedText.split(/\s+/).filter(Boolean).length;
+    const inputParagraphs = splitInputParagraphs(trimmedText);
+    const inputParagraphCount = inputParagraphs.length || 1;
 
-    const prompt = `${systemPersona}
+    if (inputParagraphCount === 0) {
+      return NextResponse.json(
+        { error: "Please enter some text." },
+        { status: 400 },
+      );
+    }
 
-CRITICAL HUMAN BYPASS LAWS:
-- Structural Preservation: You must output exactly the same number of paragraphs as the input text (${inputParagraphCount} paragraphs). Do not compress or truncate the core information.
-- Content Integrity: Rewrite every single concept, point, and supporting detail fully. Do not omit points to save space, and do not summarize multiple thoughts into one sentence. You must match the comprehensive depth of the input text exactly, using professional terminology. Target roughly ${inputWordCount} words (±10%).
-- Zero Fictional Padding: Focus purely on humanizing the factual flow of the text provided. Do not invent external story scenarios, background settings, or sensory descriptions (such as office environments, squeaking chairs, or external noises).
-- Write with unpredictable human structural flows, balancing concise multi-clause thoughts with brief 5-word declarations to shatter standard machine prose loops.
-- Ensure all sophisticated corporate or academic terms are used with native fluency, avoiding linear list groups or structured conclusion summaries.
-- Return ONLY the finalized rewritten text content. Do not output chat text, notes, markdown formatting headers, or commentary.
+    const rewrittenParagraphs = await Promise.all(
+      inputParagraphs.map(async (paragraphText, paragraphIndex) => {
+        const prompt = buildParagraphPrompt(
+          systemPersona,
+          paragraphText,
+          paragraphIndex,
+          inputParagraphCount,
+        );
 
-Text to rewrite:
-${trimmedText}`;
+        const response = await ai.models.generateContent({
+          model: MODEL,
+          contents: prompt,
+          config: {
+            temperature: 0.98,
+            topP: 0.95,
+          },
+        });
 
-    const response = await ai.models.generateContent({
-      model: MODEL,
-      contents: prompt,
-      config: {
-        temperature: 0.98,
-        topP: 0.95,
-      },
-    });
+        const rawParagraph = readGeminiText(response).trim();
+        if (!rawParagraph) {
+          throw new Error(
+            `Empty response from Gemini engine for paragraph ${paragraphIndex + 1}.`,
+          );
+        }
 
-    const rawResult = readGeminiText(response).trim();
+        return rawParagraph.replace(/\n+/g, " ").trim();
+      }),
+    );
+
+    const rawResult = rewrittenParagraphs.join("\n\n").trim();
 
     if (!rawResult) {
       return NextResponse.json(
