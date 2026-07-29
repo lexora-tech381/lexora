@@ -330,6 +330,7 @@ function programmaticHumanizeFilter(text: string): string {
   return invertedParagraphs
     .join("\n\n")
     .replace(/^#+\s*/gm, "")
+    .replace(/^Target\s+about\s+\d+\s+words\.?/gmi, "")
     .replace(/[^\S\n]+/g, " ")
     .replace(/,\s*—/g, " —")
     .replace(/[ \t]+$/gm, "")
