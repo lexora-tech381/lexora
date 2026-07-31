@@ -8,7 +8,7 @@ const ai = new GoogleGenAI({
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const MAX_TEXT_LENGTH = 12000;
 
-const CONJUNCTION_PATTERN = /\b(and|but|so|or|while|because)\b/gi;
+const CONJUNCTION_PATTERN = /\s+(and|but|so|or|because)\s+/gi;
 
 const PARAGRAPH_TRANSITION_INSERTS = [
   " — a metric that explicitly reveals why ",
@@ -17,6 +17,9 @@ const PARAGRAPH_TRANSITION_INSERTS = [
   " — an operational factor that becomes evident when ",
   " — showing a clean correlation to the way ",
 ] as const;
+
+const ACTIVE_VERB_STARTERS =
+  /^(improve|find|enhance|reduce|support|enable|create|build|maintain|deliver|provide|offer|allow|require|include|involve|produce|drive|shape|reflect|indicate|demonstrate|operate|function|strengthen|increase|help|work|lead|promote|train|focus|balance|develop|establish|ensure|yield|generate|optimize|mitigate|foster|nurture|blunt|temper|prompt|achieve|gain|restore|protect|guide|manage|organize|clarify|simplify|expand|strengthen)\b/i;
 
 const ADVERSARIAL_STYLE_CORE =
   "You are an elite institutional expert delivering an analytical critique of a draft. You must actively break linear machine prose loops and predictable textbook symmetry. Never organize arguments symmetrically. Mix core definitions with practical, sharp conclusions. Use highly volatile sentence variance—alternating between short structural assertions and dense compound thoughts wrapped in semicolons. Avoid predictable transitional loops like 'Furthermore', 'Moreover', and 'In conclusion'.";
@@ -194,9 +197,7 @@ function findConjunctionMatch(sentence: string): RegExpExecArray | null {
     if (
       typeof conjunctionMatch.index === "number" &&
       typeof conjunctionMatch[0] === "string" &&
-      conjunctionMatch[0].length > 0 &&
-      conjunctionMatch.index > 12 &&
-      conjunctionMatch.index + conjunctionMatch[0].length < sentence.length - 12
+      conjunctionMatch[0].length > 0
     ) {
       const left = sentence.substring(0, conjunctionMatch.index).trim();
       const right = sentence
@@ -205,7 +206,7 @@ function findConjunctionMatch(sentence: string): RegExpExecArray | null {
       const leftWords = left.split(/\s+/).filter(Boolean).length;
       const rightWords = right.split(/\s+/).filter(Boolean).length;
 
-      if (leftWords >= 4 && rightWords >= 3) {
+      if (leftWords >= 6 && rightWords >= 6) {
         const distance = Math.abs(conjunctionMatch.index - midpoint);
         if (distance < bestDistance) {
           bestDistance = distance;
@@ -241,6 +242,39 @@ function pickUnusedTransitionInsert(
   return PARAGRAPH_TRANSITION_INSERTS[selectedIndex];
 }
 
+function part2StartsWithActiveVerb(part2: string): boolean {
+  const firstToken = (part2.trim().split(/\s+/)[0] ?? "").replace(
+    /[^\w']/g,
+    "",
+  );
+  return ACTIVE_VERB_STARTERS.test(firstToken);
+}
+
+function alignPart2AfterInsert(insert: string, part2: string): string {
+  if (!part2StartsWithActiveVerb(part2)) {
+    return part2;
+  }
+
+  const insertTail = (insert.trim().split(/\s+/).pop() ?? "").toLowerCase();
+
+  // "why/when/that/way improve" → "why/when/that/way they improve"
+  if (
+    insertTail === "why" ||
+    insertTail === "when" ||
+    insertTail === "that" ||
+    insertTail === "way"
+  ) {
+    return `they ${part2}`;
+  }
+
+  // Generic bridge for bare verbs after other transition shapes
+  return `to ${part2}`;
+}
+
+function sanitizeClause(text: string): string {
+  return text.replace(/\s+/g, " ").replace(/,\s*—/g, " —").trim();
+}
+
 function structuralInversionParser(paragraph: string): string {
   const sentences = extractSentences(paragraph);
   const processedSentences: string[] = [];
@@ -270,44 +304,43 @@ function structuralInversionParser(paragraph: string): string {
       continue;
     }
 
-    const matchedWord = conjunctionMatch[0];
+    const matchedSpan = conjunctionMatch[0];
+    const matchedWord = (conjunctionMatch[1] ?? matchedSpan)
+      .toLowerCase()
+      .trim();
     const part1 = current.substring(0, conjunctionMatch.index).trim();
     const part2 = current
-      .substring(conjunctionMatch.index + matchedWord.length)
+      .substring(conjunctionMatch.index + matchedSpan.length)
       .trim();
 
-    if (!part1 || !part2) {
+    const part1Words = part1.split(/\s+/).filter(Boolean).length;
+    const part2Words = part2.split(/\s+/).filter(Boolean).length;
+
+    if (!part1 || !part2 || part1Words < 6 || part2Words < 6) {
       processedSentences.push(current);
       continue;
     }
 
     const randomInsert = pickUnusedTransitionInsert(usedInsertIndexes);
+    const isTooComplexForInsert =
+      part2StartsWithActiveVerb(part2) &&
+      (part2Words < 8 || !/\b(their|the|a|an|this|these|those|people|teams|students|professionals|organizations)\b/i.test(part2));
 
-    // Never reuse the same transition twice in one paragraph block
-    if (randomInsert) {
+    // Safe fallback: clean em-dash while preserving the original conjunction
+    if (!randomInsert || isTooComplexForInsert) {
       processedSentences.push(
-        `${part1}${randomInsert}${part2}`
-          .replace(/\s+/g, " ")
-          .replace(/,\s*—/g, " —")
-          .trim(),
+        sanitizeClause(`${part1} — ${matchedWord} ${part2}`),
       );
       continue;
     }
 
-    // Exhausted unique inserts for this paragraph: keep original conjunction cleanly
+    const alignedPart2 = alignPart2AfterInsert(randomInsert, part2);
     processedSentences.push(
-      `${part1} — ${matchedWord.toLowerCase().trim()} ${part2}`
-        .replace(/\s+/g, " ")
-        .replace(/,\s*—/g, " —")
-        .trim(),
+      sanitizeClause(`${part1}${randomInsert}${alignedPart2}`),
     );
   }
 
-  return processedSentences
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .replace(/,\s*—/g, " —")
-    .trim();
+  return sanitizeClause(processedSentences.join(" "));
 }
 
 function programmaticHumanizeFilter(text: string): string {
