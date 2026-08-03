@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { formatPlanName, normalizePlanId, type PlanId } from "@/lib/plan";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import {
@@ -31,12 +32,7 @@ interface PricingPlan {
   popular?: boolean;
 }
 
-const planName = "Free";
 const dailyLimit = 10;
-
-// Future subscription integration point:
-// Replace `null` with the verified plan id from billing/webhook data.
-const currentPlanId: PricingPlan["id"] | null = null;
 
 function getUserInitial(user: User): string {
   const fullName = user.user_metadata?.full_name;
@@ -155,6 +151,7 @@ export default function PricingPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [todayUsage, setTodayUsage] = useState(0);
+  const [currentPlanId, setCurrentPlanId] = useState<PlanId>("free");
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -211,17 +208,31 @@ export default function PricingPage() {
 
       if (currentSession) {
         const today = new Date().toISOString().split("T")[0];
-        const { data: usage, error: usageError } = await supabase
-          .from("usage")
-          .select("count")
-          .eq("user_id", currentSession.user.id)
-          .eq("date", today)
-          .maybeSingle();
+        const [usageResult, profileResult] = await Promise.all([
+          supabase
+            .from("usage")
+            .select("count")
+            .eq("user_id", currentSession.user.id)
+            .eq("date", today)
+            .maybeSingle(),
+          supabase
+            .from("profiles")
+            .select("plan")
+            .eq("id", currentSession.user.id)
+            .maybeSingle(),
+        ]);
 
-        if (usageError) {
-          console.error("Pricing usage error:", usageError);
+        if (usageResult.error) {
+          console.error("Pricing usage error:", usageResult.error);
         } else if (isMounted) {
-          setTodayUsage(usage?.count || 0);
+          setTodayUsage(usageResult.data?.count || 0);
+        }
+
+        if (profileResult.error) {
+          console.error("Pricing profile error:", profileResult.error);
+          if (isMounted) setCurrentPlanId("free");
+        } else if (isMounted) {
+          setCurrentPlanId(normalizePlanId(profileResult.data?.plan));
         }
       }
 
@@ -389,6 +400,8 @@ export default function PricingPage() {
     : isTablet
       ? "1fr 1fr"
       : "repeat(4, 1fr)";
+
+  const planName = formatPlanName(currentPlanId);
 
   return (
     <main

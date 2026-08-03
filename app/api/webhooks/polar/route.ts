@@ -191,15 +191,20 @@ async function updateProfileForSubscription(
   }
 
   const payload = resolveProfileUpdate(eventType, subscription);
+  const email = subscription.customer?.email?.trim().toLowerCase() || null;
   const supabase = getSupabaseAdminClient();
 
-  const { error } = await supabase
-    .from("profiles")
-    .update(payload)
-    .eq("id", userId);
+  const { error } = await supabase.from("profiles").upsert(
+    {
+      id: userId,
+      ...(email ? { email } : {}),
+      ...payload,
+    },
+    { onConflict: "id" },
+  );
 
   if (error) {
-    console.error("Polar webhook profile update failed:", error);
+    console.error("Polar webhook profile upsert failed:", error);
     return {
       ok: false,
       status: 500,

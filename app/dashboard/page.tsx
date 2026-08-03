@@ -4,6 +4,13 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import {
+  formatPlanName,
+  getDailyRewriteLimit,
+  getPlanDetails,
+  normalizePlanId,
+  type PlanId,
+} from "@/lib/plan";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import {
@@ -40,9 +47,6 @@ interface StatCardProps {
   note: string;
   tone?: "purple" | "green" | "orange" | "blue";
 }
-
-const planName = "Free";
-const dailyLimit = 10;
 
 function countWords(text: string | null | undefined): number {
   if (!text || !text.trim()) return 0;
@@ -232,11 +236,19 @@ function UsageChart({ days }: { days: DayUsage[] }) {
 function UsageProgress({
   todayUsage,
   remainingUses,
+  dailyLimit,
+  isFreePlan,
+  allowanceLabel,
 }: {
   todayUsage: number;
   remainingUses: number;
+  dailyLimit: number;
+  isFreePlan: boolean;
+  allowanceLabel: string;
 }) {
-  const percent = Math.min((todayUsage / dailyLimit) * 100, 100);
+  const percent = isFreePlan
+    ? Math.min((todayUsage / Math.max(dailyLimit, 1)) * 100, 100)
+    : Math.min(todayUsage > 0 ? 35 : 8, 100);
   const radius = 42;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (percent / 100) * circumference;
@@ -273,18 +285,26 @@ function UsageProgress({
             fontWeight="700"
             fill="#0f172a"
           >
-            {Math.round(percent)}%
+            {isFreePlan ? `${Math.round(percent)}%` : todayUsage}
           </text>
         </svg>
       </div>
 
       <div style={{ minWidth: 0, flex: 1 }}>
-        <h2 style={cardTitle}>Daily usage</h2>
+        <h2 style={cardTitle}>{isFreePlan ? "Daily usage" : "Plan usage"}</h2>
         <p style={usagePrimary}>
-          You have used {todayUsage} of {dailyLimit} daily rewrites.
+          {isFreePlan
+            ? `You have used ${todayUsage} of ${dailyLimit} daily rewrites.`
+            : `Your plan includes ${allowanceLabel}.`}
         </p>
-        <p style={mutedText}>{remainingUses} remaining today</p>
-        <p style={resetText}>Resets tomorrow</p>
+        <p style={mutedText}>
+          {isFreePlan
+            ? `${remainingUses} remaining today`
+            : `${todayUsage} rewrites used today`}
+        </p>
+        <p style={resetText}>
+          {isFreePlan ? "Resets tomorrow" : "Billing cycle renews with Polar"}
+        </p>
       </div>
     </article>
   );
@@ -385,6 +405,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const [planId, setPlanId] = useState<PlanId>("free");
   const [documentsCount, setDocumentsCount] = useState(0);
   const [totalWords, setTotalWords] = useState(0);
   const [todayUsage, setTodayUsage] = useState(0);
@@ -442,7 +463,7 @@ export default function DashboardPage() {
 
       let hasPartialError = false;
 
-      const [countResult, wordsResult, todayResult, recentResult, weekResult] =
+      const [countResult, wordsResult, todayResult, recentResult, weekResult, profileResult] =
         await Promise.all([
           supabase
             .from("documents")
@@ -470,7 +491,20 @@ export default function DashboardPage() {
             .eq("user_id", userId)
             .gte("date", rangeStart)
             .lte("date", today),
+          supabase
+            .from("profiles")
+            .select("plan, subscription_status, current_period_end")
+            .eq("id", userId)
+            .maybeSingle(),
         ]);
+
+      if (profileResult.error) {
+        console.error("Dashboard profile error:", profileResult.error);
+        hasPartialError = true;
+        if (isMounted) setPlanId("free");
+      } else if (isMounted) {
+        setPlanId(normalizePlanId(profileResult.data?.plan));
+      }
 
       if (countResult.error) {
         console.error("Dashboard document count error:", countResult.error);
@@ -559,7 +593,13 @@ export default function DashboardPage() {
     };
   }, [router]);
 
-  const remainingUses = Math.max(dailyLimit - todayUsage, 0);
+  const planDetails = getPlanDetails(planId);
+  const planName = formatPlanName(planId);
+  const dailyLimit = getDailyRewriteLimit(planId);
+  const isFreePlan = planId === "free";
+  const remainingUses = isFreePlan
+    ? Math.max(dailyLimit - todayUsage, 0)
+    : todayUsage;
 
   const statsColumns = useMemo(() => {
     if (isMobile) return "1fr";
@@ -650,7 +690,9 @@ export default function DashboardPage() {
               <div style={headerMeta}>
                 <span style={planBadge}>{planName} Plan</span>
                 <span style={usageBadge}>
-                  {todayUsage} / {dailyLimit} uses today
+                  {isFreePlan
+                    ? `${todayUsage} / ${dailyLimit} uses today`
+                    : planDetails.allowanceLabel}
                 </span>
                 {session ? (
                   <div style={avatar} aria-label="Account">
@@ -696,9 +738,9 @@ export default function DashboardPage() {
               />
               <StatCard
                 icon={<Clock size={20} />}
-                title="Remaining Uses"
-                value={remainingUses}
-                note={`of ${dailyLimit} today`}
+                title={isFreePlan ? "Remaining Uses" : "Plan Allowance"}
+                value={isFreePlan ? remainingUses : planDetails.allowanceLabel}
+                note={isFreePlan ? `of ${dailyLimit} today` : `${planName} access`}
                 tone="blue"
               />
             </section>
@@ -729,6 +771,9 @@ export default function DashboardPage() {
               <UsageProgress
                 todayUsage={todayUsage}
                 remainingUses={remainingUses}
+                dailyLimit={dailyLimit}
+                isFreePlan={isFreePlan}
+                allowanceLabel={planDetails.allowanceLabel}
               />
 
               <article style={panelCard}>
@@ -738,10 +783,9 @@ export default function DashboardPage() {
                 </div>
 
                 <ul style={planList}>
-                  <li>{dailyLimit} humanizations per day</li>
-                  <li>Free rewrite mode</li>
-                  <li>Standard processing</li>
-                  <li>Saved documents</li>
+                  {planDetails.features.map((feature) => (
+                    <li key={feature}>{feature}</li>
+                  ))}
                 </ul>
 
                 <button
@@ -751,7 +795,7 @@ export default function DashboardPage() {
                   style={primaryButton}
                 >
                   <Crown size={16} />
-                  Upgrade Plan
+                  {isFreePlan ? "Upgrade Plan" : "Manage Plan"}
                 </button>
               </article>
             </section>

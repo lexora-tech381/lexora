@@ -6,6 +6,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import {
+  formatPlanName,
+  getDailyRewriteLimit,
+  getPlanDetails,
+  normalizePlanId,
+  type PlanId,
+} from "@/lib/plan";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import {
@@ -21,9 +28,6 @@ import {
   Shield,
   User as UserIcon,
 } from "lucide-react";
-
-const planName = "Free";
-const dailyLimit = 10;
 
 function getUserInitial(user: User): string {
   const fullName = user.user_metadata?.full_name;
@@ -95,6 +99,7 @@ export default function SettingsPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [todayUsage, setTodayUsage] = useState(0);
+  const [planId, setPlanId] = useState<PlanId>("free");
   const [isMobile, setIsMobile] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -158,17 +163,31 @@ export default function SettingsPage() {
       );
 
       const today = new Date().toISOString().split("T")[0];
-      const { data: usage, error: usageError } = await supabase
-        .from("usage")
-        .select("count")
-        .eq("user_id", currentSession.user.id)
-        .eq("date", today)
-        .maybeSingle();
+      const [usageResult, profileResult] = await Promise.all([
+        supabase
+          .from("usage")
+          .select("count")
+          .eq("user_id", currentSession.user.id)
+          .eq("date", today)
+          .maybeSingle(),
+        supabase
+          .from("profiles")
+          .select("plan, subscription_status, current_period_end")
+          .eq("id", currentSession.user.id)
+          .maybeSingle(),
+      ]);
 
-      if (usageError) {
-        console.error("Settings usage error:", usageError);
+      if (usageResult.error) {
+        console.error("Settings usage error:", usageResult.error);
       } else if (isMounted) {
-        setTodayUsage(usage?.count || 0);
+        setTodayUsage(usageResult.data?.count || 0);
+      }
+
+      if (profileResult.error) {
+        console.error("Settings profile error:", profileResult.error);
+        if (isMounted) setPlanId("free");
+      } else if (isMounted) {
+        setPlanId(normalizePlanId(profileResult.data?.plan));
       }
 
       if (isMounted) setCheckingAuth(false);
@@ -201,6 +220,11 @@ export default function SettingsPage() {
       subscription.unsubscribe();
     };
   }, [router]);
+
+  const planDetails = getPlanDetails(planId);
+  const planName = formatPlanName(planId);
+  const dailyLimit = getDailyRewriteLimit(planId);
+  const isFreePlan = planId === "free";
 
   const navigate = (path: string) => {
     router.push(path);
@@ -679,10 +703,14 @@ export default function SettingsPage() {
               <div style={planBox}>
                 <div>
                   <p style={planLabel}>Current access</p>
-                  <p style={planValue}>Free plan</p>
+                  <p style={planValue}>{planName} plan</p>
                   <p style={cardText}>
-                    {dailyLimit} rewrites per day. Paid plan status will appear
-                    here once billing verification is connected.
+                    {isFreePlan
+                      ? `${dailyLimit} rewrites per day.`
+                      : planDetails.allowanceLabel}
+                    {isFreePlan
+                      ? " Upgrade anytime from Pricing."
+                      : " Managed through Polar billing."}
                   </p>
                 </div>
                 <Link
@@ -690,7 +718,7 @@ export default function SettingsPage() {
                   className="lexora-settings-outline"
                   style={outlineButton}
                 >
-                  View plans
+                  {isFreePlan ? "View plans" : "Manage plan"}
                 </Link>
               </div>
             </section>
