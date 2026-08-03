@@ -319,6 +319,11 @@ export async function POST(req: Request) {
 
   try {
     const subscription = event.data as Subscription;
+    console.log("=== POLAR WEBHOOK ===");
+console.log({
+  productId: subscription.productId,
+  metadata: subscription.metadata,
+});
     const result = await syncSubscriptionFromPolar(event.type, subscription);
 
     if (!result.ok) {
