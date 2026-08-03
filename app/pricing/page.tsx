@@ -216,9 +216,11 @@ export default function PricingPage() {
             .eq("date", today)
             .maybeSingle(),
           supabase
-            .from("profiles")
+            .from("subscriptions")
             .select("plan")
-            .eq("id", currentSession.user.id)
+            .eq("user_id", currentSession.user.id)
+            .order("updated_at", { ascending: false })
+            .limit(1)
             .maybeSingle(),
         ]);
 
@@ -229,7 +231,7 @@ export default function PricingPage() {
         }
 
         if (profileResult.error) {
-          console.error("Pricing profile error:", profileResult.error);
+          console.error("Pricing subscription error:", profileResult.error);
           if (isMounted) setCurrentPlanId("free");
         } else if (isMounted) {
           setCurrentPlanId(normalizePlanId(profileResult.data?.plan));

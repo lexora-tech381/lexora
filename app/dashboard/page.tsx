@@ -492,14 +492,16 @@ export default function DashboardPage() {
             .gte("date", rangeStart)
             .lte("date", today),
           supabase
-            .from("profiles")
-            .select("plan, subscription_status, current_period_end")
-            .eq("id", userId)
+            .from("subscriptions")
+            .select("plan, status, current_period_end")
+            .eq("user_id", userId)
+            .order("updated_at", { ascending: false })
+            .limit(1)
             .maybeSingle(),
         ]);
 
       if (profileResult.error) {
-        console.error("Dashboard profile error:", profileResult.error);
+        console.error("Dashboard subscription error:", profileResult.error);
         hasPartialError = true;
         if (isMounted) setPlanId("free");
       } else if (isMounted) {

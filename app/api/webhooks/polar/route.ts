@@ -11,6 +11,7 @@ export const runtime = "nodejs";
 const PAID_PLANS = ["silver", "gold", "premium"] as const;
 type PaidPlanId = (typeof PAID_PLANS)[number];
 type PlanId = PaidPlanId | "free";
+type BillingCycle = "monthly" | "yearly";
 
 const HANDLED_EVENTS = new Set([
   "subscription.created",
@@ -19,12 +20,17 @@ const HANDLED_EVENTS = new Set([
   "subscription.canceled",
 ]);
 
-type ProfileUpdate = {
+type SubscriptionRow = {
+  user_id: string;
   plan: PlanId;
-  subscription_status: string;
-  subscription_id: string | null;
-  customer_id: string | null;
+  status: string;
+  billing_cycle: BillingCycle;
+  polar_customer_id: string | null;
+  polar_subscription_id: string | null;
+  polar_product_id: string | null;
+  current_period_start: string | null;
   current_period_end: string | null;
+  cancel_at_period_end: boolean;
   updated_at: string;
 };
 
@@ -79,6 +85,20 @@ function toIsoDate(value: Date | string | null | undefined): string | null {
   return parsed.toISOString();
 }
 
+function resolveUserId(subscription: Subscription): string | null {
+  const externalId = subscription.customer?.externalId?.trim();
+  if (externalId) {
+    return externalId;
+  }
+
+  const metadataUserId = subscription.metadata?.user_id;
+  if (typeof metadataUserId === "string" && metadataUserId.trim()) {
+    return metadataUserId.trim();
+  }
+
+  return null;
+}
+
 function resolvePaidPlan(subscription: Subscription): PaidPlanId | null {
   const productMap = getProductPlanMap();
   const productPlan = productMap[subscription.productId];
@@ -94,10 +114,7 @@ function resolvePaidPlan(subscription: Subscription): PaidPlanId | null {
   return null;
 }
 
-function resolveProfileUpdate(
-  eventType: string,
-  subscription: Subscription,
-): ProfileUpdate {
+function resolvePlan(eventType: string, subscription: Subscription): PlanId {
   const status = String(subscription.status || "").toLowerCase();
   const isCanceledEvent = eventType === "subscription.canceled";
   const isActiveEvent = eventType === "subscription.active";
@@ -107,80 +124,143 @@ function resolveProfileUpdate(
     status === "incomplete_expired";
   const isActiveStatus = status === "active" || status === "trialing";
 
-  let plan: PlanId = "free";
-
   if (isCanceledEvent || isCanceledStatus) {
-    plan = "free";
-  } else if (isActiveEvent || isActiveStatus) {
-    plan = resolvePaidPlan(subscription) || "free";
-  } else {
-    // created/updated while payment is still pending: keep free until active
-    plan = "free";
+    return "free";
   }
 
+  if (isActiveEvent || isActiveStatus) {
+    return resolvePaidPlan(subscription) || "free";
+  }
+
+  // Payment may still be pending on created/updated.
+  return resolvePaidPlan(subscription) || "free";
+}
+
+function resolveBillingCycle(subscription: Subscription): BillingCycle {
+  const metadataBilling = subscription.metadata?.billing;
+  if (metadataBilling === "monthly" || metadataBilling === "yearly") {
+    return metadataBilling;
+  }
+
+  const interval = String(subscription.recurringInterval || "").toLowerCase();
+  if (interval === "year") {
+    return "yearly";
+  }
+
+  return "monthly";
+}
+
+function buildSubscriptionRow(
+  eventType: string,
+  subscription: Subscription,
+  userId: string,
+): SubscriptionRow {
+  const status = String(subscription.status || "").toLowerCase();
+
   return {
-    plan,
-    subscription_status: status || (isCanceledEvent ? "canceled" : "unknown"),
-    subscription_id: subscription.id || null,
-    customer_id: subscription.customerId || subscription.customer?.id || null,
+    user_id: userId,
+    plan: resolvePlan(eventType, subscription),
+    status: status || (eventType === "subscription.canceled" ? "canceled" : "unknown"),
+    billing_cycle: resolveBillingCycle(subscription),
+    polar_customer_id: subscription.customerId || subscription.customer?.id || null,
+    polar_subscription_id: subscription.id || null,
+    polar_product_id: subscription.productId || null,
+    current_period_start: toIsoDate(subscription.currentPeriodStart),
     current_period_end: toIsoDate(subscription.currentPeriodEnd),
+    cancel_at_period_end: Boolean(subscription.cancelAtPeriodEnd),
     updated_at: new Date().toISOString(),
   };
 }
 
-async function findProfileUserId(
-  subscription: Subscription,
-): Promise<string | null> {
+async function upsertSubscriptionRow(
+  row: SubscriptionRow,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
   const supabase = getSupabaseAdminClient();
-  const externalId =
-    subscription.customer?.externalId?.trim() ||
-    (typeof subscription.metadata?.user_id === "string"
-      ? subscription.metadata.user_id.trim()
-      : "") ||
-    "";
-  const email = subscription.customer?.email?.trim().toLowerCase() || "";
 
-  if (externalId) {
-    const { data: byId, error: byIdError } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("id", externalId)
-      .maybeSingle();
+  // Prefer one row per user. If that unique constraint is missing, fall back
+  // to polar_subscription_id, then manual update/insert.
+  const byUser = await supabase.from("subscriptions").upsert(row, {
+    onConflict: "user_id",
+  });
 
-    if (byIdError) {
-      console.error("Polar webhook profile lookup by id failed:", byIdError);
-    } else if (byId?.id) {
-      return byId.id;
-    }
+  if (!byUser.error) {
+    return { ok: true };
   }
 
-  if (email) {
-    const { data: byEmail, error: byEmailError } = await supabase
-      .from("profiles")
-      .select("id")
-      .ilike("email", email)
-      .maybeSingle();
+  console.error(
+    "Polar webhook upsert by user_id failed, trying polar_subscription_id:",
+    byUser.error,
+  );
 
-    if (byEmailError) {
-      console.error(
-        "Polar webhook profile lookup by email failed:",
-        byEmailError,
-      );
-    } else if (byEmail?.id) {
-      return byEmail.id;
+  if (row.polar_subscription_id) {
+    const byPolarSub = await supabase.from("subscriptions").upsert(row, {
+      onConflict: "polar_subscription_id",
+    });
+
+    if (!byPolarSub.error) {
+      return { ok: true };
     }
+
+    console.error(
+      "Polar webhook upsert by polar_subscription_id failed:",
+      byPolarSub.error,
+    );
   }
 
-  // Checkout sets externalCustomerId to the Supabase user id.
-  // If the profile row is missing, still attempt an update by that id.
-  return externalId || null;
+  const { data: existing, error: lookupError } = await supabase
+    .from("subscriptions")
+    .select("id")
+    .eq("user_id", row.user_id)
+    .maybeSingle();
+
+  if (lookupError) {
+    console.error("Polar webhook subscription lookup failed:", lookupError);
+    return {
+      ok: false,
+      status: 500,
+      error: "Failed to look up subscription row.",
+    };
+  }
+
+  if (existing?.id) {
+    const { error: updateError } = await supabase
+      .from("subscriptions")
+      .update(row)
+      .eq("user_id", row.user_id);
+
+    if (updateError) {
+      console.error("Polar webhook subscription update failed:", updateError);
+      return {
+        ok: false,
+        status: 500,
+        error: "Failed to update subscription.",
+      };
+    }
+
+    return { ok: true };
+  }
+
+  const { error: insertError } = await supabase
+    .from("subscriptions")
+    .insert(row);
+
+  if (insertError) {
+    console.error("Polar webhook subscription insert failed:", insertError);
+    return {
+      ok: false,
+      status: 500,
+      error: "Failed to insert subscription.",
+    };
+  }
+
+  return { ok: true };
 }
 
-async function updateProfileForSubscription(
+async function syncSubscriptionFromPolar(
   eventType: string,
   subscription: Subscription,
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
-  const userId = await findProfileUserId(subscription);
+  const userId = resolveUserId(subscription);
 
   if (!userId) {
     return {
@@ -190,29 +270,8 @@ async function updateProfileForSubscription(
     };
   }
 
-  const payload = resolveProfileUpdate(eventType, subscription);
-  const email = subscription.customer?.email?.trim().toLowerCase() || null;
-  const supabase = getSupabaseAdminClient();
-
-  const { error } = await supabase.from("profiles").upsert(
-    {
-      id: userId,
-      ...(email ? { email } : {}),
-      ...payload,
-    },
-    { onConflict: "id" },
-  );
-
-  if (error) {
-    console.error("Polar webhook profile upsert failed:", error);
-    return {
-      ok: false,
-      status: 500,
-      error: "Failed to update profile.",
-    };
-  }
-
-  return { ok: true };
+  const row = buildSubscriptionRow(eventType, subscription, userId);
+  return upsertSubscriptionRow(row);
 }
 
 export async function POST(req: Request) {
@@ -258,10 +317,13 @@ export async function POST(req: Request) {
 
   try {
     const subscription = event.data as Subscription;
-    const result = await updateProfileForSubscription(event.type, subscription);
+    const result = await syncSubscriptionFromPolar(event.type, subscription);
 
     if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: result.status });
+      return NextResponse.json(
+        { error: result.error },
+        { status: result.status },
+      );
     }
 
     return NextResponse.json(
@@ -275,12 +337,12 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error("========== POLAR WEBHOOK ERROR ==========");
     console.error(error);
-  
+
     if (error instanceof Error) {
       console.error(error.message);
       console.error(error.stack);
     }
-  
+
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : String(error),

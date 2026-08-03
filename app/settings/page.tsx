@@ -171,9 +171,11 @@ export default function SettingsPage() {
           .eq("date", today)
           .maybeSingle(),
         supabase
-          .from("profiles")
-          .select("plan, subscription_status, current_period_end")
-          .eq("id", currentSession.user.id)
+          .from("subscriptions")
+          .select("plan, status, current_period_end")
+          .eq("user_id", currentSession.user.id)
+          .order("updated_at", { ascending: false })
+          .limit(1)
           .maybeSingle(),
       ]);
 
@@ -184,7 +186,7 @@ export default function SettingsPage() {
       }
 
       if (profileResult.error) {
-        console.error("Settings profile error:", profileResult.error);
+        console.error("Settings subscription error:", profileResult.error);
         if (isMounted) setPlanId("free");
       } else if (isMounted) {
         setPlanId(normalizePlanId(profileResult.data?.plan));
