@@ -4,7 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
-import { formatPlanName, normalizePlanId, type PlanId } from "@/lib/plan";
+import {
+  countWords,
+  formatPlanName,
+  formatPlanUsageLabel,
+  getCalendarMonthStartIso,
+  getPlanDetails,
+  normalizePlanId,
+  type PlanId,
+} from "@/lib/plan";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import {
@@ -19,7 +27,7 @@ import {
 type BillingCycle = "monthly" | "yearly";
 
 interface PricingPlan {
-  id: "free" | "silver" | "gold" | "premium";
+  id: PlanId;
   name: string;
   description: string;
   monthlyPrice: number;
@@ -31,8 +39,6 @@ interface PricingPlan {
   support: string;
   popular?: boolean;
 }
-
-const dailyLimit = 10;
 
 function getUserInitial(user: User): string {
   const fullName = user.user_metadata?.full_name;
@@ -71,76 +77,60 @@ function getYearlySavings(monthlyPrice: number, yearlyPrice: number) {
 }
 
 function buildPlans(): PricingPlan[] {
+  const free = getPlanDetails("free");
+  const silver = getPlanDetails("silver");
+  const gold = getPlanDetails("gold");
+  const premium = getPlanDetails("premium");
+
   return [
     {
       id: "free",
-      name: "Free",
+      name: free.name,
       description: "For trying Lexora and light everyday rewriting.",
       monthlyPrice: 0,
       yearlyPrice: 0,
-      allowance: "10 rewrites per day",
+      allowance: free.allowanceLabel,
       modes: "Free rewrite mode",
       processing: "Standard processing",
       support: "Community help resources",
-      features: [
-        "10 rewrites per day",
-        "Free rewrite mode",
-        "Standard processing",
-        "Save documents",
-      ],
+      features: free.features,
     },
     {
       id: "silver",
-      name: "Silver",
+      name: silver.name,
       description: "For light monthly writing needs.",
       monthlyPrice: 2.99,
       yearlyPrice: 29,
-      allowance: "10,000 words per month",
+      allowance: silver.allowanceLabel,
       modes: "Standard rewrite modes",
       processing: "Faster processing",
       support: "Email support",
-      features: [
-        "10,000 words per month",
-        "Standard rewrite modes",
-        "Faster processing",
-        "Email support",
-      ],
+      features: silver.features,
     },
     {
       id: "gold",
-      name: "Gold",
+      name: gold.name,
       description: "Best for regular students, creators, and freelancers.",
       monthlyPrice: 9.99,
       yearlyPrice: 99,
       popular: true,
-      allowance: "30,000 words per month",
+      allowance: gold.allowanceLabel,
       modes: "Advanced rewrite modes",
       processing: "Faster processing",
       support: "Priority support",
-      features: [
-        "30,000 words per month",
-        "Advanced rewrite modes",
-        "Faster processing",
-        "Priority support",
-      ],
+      features: gold.features,
     },
     {
       id: "premium",
-      name: "Premium",
+      name: premium.name,
       description: "For heavier professional writing workloads.",
       monthlyPrice: 19.99,
       yearlyPrice: 189,
-      allowance: "60,000 words per month",
+      allowance: premium.allowanceLabel,
       modes: "All available rewrite modes",
       processing: "Fastest available processing",
       support: "Priority support",
-      features: [
-        "60,000 words per month",
-        "All available rewrite modes",
-        "Fastest available processing",
-        "Priority support",
-        "Early access to selected features",
-      ],
+      features: premium.features,
     },
   ];
 }
@@ -151,6 +141,7 @@ export default function PricingPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [todayUsage, setTodayUsage] = useState(0);
+  const [monthlyWordsUsed, setMonthlyWordsUsed] = useState(0);
   const [currentPlanId, setCurrentPlanId] = useState<PlanId>("free");
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
@@ -208,7 +199,8 @@ export default function PricingPage() {
 
       if (currentSession) {
         const today = new Date().toISOString().split("T")[0];
-        const [usageResult, profileResult] = await Promise.all([
+        const monthStart = getCalendarMonthStartIso();
+        const [usageResult, profileResult, wordsResult] = await Promise.all([
           supabase
             .from("usage")
             .select("count")
@@ -222,6 +214,11 @@ export default function PricingPage() {
             .order("updated_at", { ascending: false })
             .limit(1)
             .maybeSingle(),
+          supabase
+            .from("documents")
+            .select("humanized_text")
+            .eq("user_id", currentSession.user.id)
+            .gte("created_at", monthStart),
         ]);
 
         if (usageResult.error) {
@@ -235,6 +232,18 @@ export default function PricingPage() {
           if (isMounted) setCurrentPlanId("free");
         } else if (isMounted) {
           setCurrentPlanId(normalizePlanId(profileResult.data?.plan));
+        }
+
+        if (wordsResult.error) {
+          console.error("Pricing monthly words error:", wordsResult.error);
+          if (isMounted) setMonthlyWordsUsed(0);
+        } else if (isMounted) {
+          const words = (wordsResult.data || []).reduce(
+            (sum, doc: { humanized_text: string | null }) =>
+              sum + countWords(doc.humanized_text),
+            0,
+          );
+          setMonthlyWordsUsed(words);
         }
       }
 
@@ -404,6 +413,10 @@ export default function PricingPage() {
       : "repeat(4, 1fr)";
 
   const planName = formatPlanName(currentPlanId);
+  const usageLabel = formatPlanUsageLabel(currentPlanId, {
+    dailyRewrites: todayUsage,
+    monthlyWords: monthlyWordsUsed,
+  });
 
   return (
     <main
@@ -439,10 +452,9 @@ export default function PricingPage() {
           onCloseMenu={() => setMenuOpen(false)}
           onNavigate={navigate}
           session={session}
-          uses={todayUsage}
           getUserInitial={getUserInitial}
           planName={planName}
-          dailyLimit={dailyLimit}
+          usageLabel={usageLabel}
           onLogout={session ? handleLogout : undefined}
           activePath="/pricing"
         />

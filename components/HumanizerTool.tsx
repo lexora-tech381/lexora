@@ -10,7 +10,7 @@ type HumanizerToolProps = {
   copied: boolean;
   errorMessage: string | null;
   successMessage?: string | null;
-  remaining: number;
+  usageBadge: string;
   planName: string;
   wordCount: number;
   charCount: number;
@@ -38,7 +38,7 @@ export default function HumanizerTool({
   copied,
   errorMessage,
   successMessage,
-  remaining,
+  usageBadge,
   planName,
   wordCount,
   charCount,
@@ -171,7 +171,7 @@ export default function HumanizerTool({
       >
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
           <span style={statusMuted}>{planName} plan</span>
-          <span style={freePill}>{remaining} uses left today</span>
+          <span style={freePill}>{usageBadge}</span>
         </div>
         <span style={{ ...secure, marginLeft: isMobile ? 0 : "auto" }}>
           Secure & private

@@ -5,6 +5,7 @@ import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { formatPlanUsageLabel } from "@/lib/plan";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import {
@@ -21,7 +22,6 @@ import {
 
 const SUPPORT_EMAIL = "supportlexora@gmail.com";
 const planName = "Free";
-const dailyLimit = 10;
 
 type IssueType = "billing" | "technical" | "account" | "general" | "";
 
@@ -389,10 +389,11 @@ export default function SupportPage() {
           onCloseMenu={() => setMenuOpen(false)}
           onNavigate={navigate}
           session={session}
-          uses={todayUsage}
           getUserInitial={getUserInitial}
           planName={planName}
-          dailyLimit={dailyLimit}
+          usageLabel={formatPlanUsageLabel("free", {
+            dailyRewrites: todayUsage,
+          })}
           onLogout={session ? handleLogout : undefined}
           activePath="/support"
         />

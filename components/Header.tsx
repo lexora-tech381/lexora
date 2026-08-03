@@ -10,10 +10,10 @@ type HeaderProps = {
   onCloseMenu: () => void;
   onNavigate: (path: string) => void;
   session: Session | null;
-  uses: number;
   getUserInitial: (user: Session["user"]) => string;
   planName?: string;
-  dailyLimit?: number;
+  /** Pre-formatted usage string from lib/plan helpers. */
+  usageLabel?: string;
   onLogout?: () => void;
   activePath?: string;
 };
@@ -35,10 +35,9 @@ export default function Header({
   onCloseMenu,
   onNavigate,
   session,
-  uses,
   getUserInitial,
   planName = "Free",
-  dailyLimit = 10,
+  usageLabel = "0 / 10 uses today",
   onLogout,
   activePath,
 }: HeaderProps) {
@@ -90,16 +89,14 @@ export default function Header({
           ) : (
             <div style={metaGroup}>
               <span style={planBadge}>{planName} Plan</span>
-              <span style={usageBadge}>
-                <span style={usageCount}>{uses}</span> / {dailyLimit} uses today
-              </span>
+              <span style={usageBadge}>{usageLabel}</span>
             </div>
           )}
 
           <div style={actionsRow}>
             {isMobile && (
-              <span style={usageBadgeCompact} aria-label="Daily usage">
-                {uses}/{dailyLimit}
+              <span style={usageBadgeCompact} aria-label="Plan usage">
+                {usageLabel}
               </span>
             )}
             {session ? (
@@ -237,18 +234,17 @@ const usageBadge = {
   whiteSpace: "nowrap" as const,
 };
 
-const usageCount = {
-  color: "#0f172a",
-  fontWeight: 700 as const,
-};
-
 const usageBadgeCompact = {
   background: "#f1f5f9",
   color: "#334155",
   padding: "6px 10px",
   borderRadius: "999px",
-  fontSize: "12px",
+  fontSize: "11px",
   fontWeight: 600 as const,
+  maxWidth: "160px",
+  overflow: "hidden" as const,
+  textOverflow: "ellipsis" as const,
+  whiteSpace: "nowrap" as const,
 };
 
 const smallButton = {

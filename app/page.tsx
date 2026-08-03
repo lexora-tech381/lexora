@@ -5,8 +5,14 @@ import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import {
+  countWords,
   formatPlanName,
+  formatPlanUsageLabel,
+  formatRemainingAllowanceLabel,
+  getCalendarMonthStartIso,
   getDailyRewriteLimit,
+  getMonthlyWordLimit,
+  isFreePlan,
   normalizePlanId,
   type PlanId,
 } from "@/lib/plan";
@@ -25,6 +31,7 @@ export default function Home() {
   const [mode, setMode] = useState("Free");
   const [tone, setTone] = useState("Natural");
   const [uses, setUses] = useState(0);
+  const [monthlyWordsUsed, setMonthlyWordsUsed] = useState(0);
   const [planId, setPlanId] = useState<PlanId>("free");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -52,8 +59,9 @@ export default function Home() {
       if (currentSession) {
         const today = new Date().toISOString().split("T")[0];
         const userId = currentSession.user.id;
+        const monthStart = getCalendarMonthStartIso();
 
-        const [usageResult, subscriptionResult] = await Promise.all([
+        const [usageResult, subscriptionResult, wordsResult] = await Promise.all([
           supabase
             .from("usage")
             .select("count")
@@ -67,6 +75,11 @@ export default function Home() {
             .order("updated_at", { ascending: false })
             .limit(1)
             .maybeSingle(),
+          supabase
+            .from("documents")
+            .select("humanized_text")
+            .eq("user_id", userId)
+            .gte("created_at", monthStart),
         ]);
 
         if (usageResult.error) {
@@ -80,10 +93,23 @@ export default function Home() {
           setPlanId(normalizePlanId(subscriptionResult.data?.plan));
         }
 
+        if (wordsResult.error) {
+          console.log("Monthly words load error:", wordsResult.error);
+          setMonthlyWordsUsed(0);
+        } else {
+          const words = (wordsResult.data || []).reduce(
+            (sum, doc: { humanized_text: string | null }) =>
+              sum + countWords(doc.humanized_text),
+            0,
+          );
+          setMonthlyWordsUsed(words);
+        }
+
         setUses(usageResult.data?.count || 0);
       } else {
         setPlanId("free");
         setUses(0);
+        setMonthlyWordsUsed(0);
       }
     };
 
@@ -96,6 +122,7 @@ export default function Home() {
       if (!currentSession) {
         setPlanId("free");
         setUses(0);
+        setMonthlyWordsUsed(0);
       }
     });
 
@@ -115,13 +142,19 @@ export default function Home() {
     return "U";
   }
 
-  const dailyLimit = getDailyRewriteLimit(planId);
   const planName = formatPlanName(planId);
-  const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+  const dailyLimit = getDailyRewriteLimit(planId);
+  const monthlyWordLimit = getMonthlyWordLimit(planId);
+  const usageSnapshot = {
+    dailyRewrites: uses,
+    monthlyWords: monthlyWordsUsed,
+  };
+  const usageLabel = formatPlanUsageLabel(planId, usageSnapshot);
+  const usageBadge = formatRemainingAllowanceLabel(planId, usageSnapshot);
+  const wordCount = countWords(text);
   const charCount = text.length;
-  const resultWords = result.trim() ? result.trim().split(/\s+/).length : 0;
+  const resultWords = countWords(result);
   const resultChars = result.length;
-  const remaining = Math.max(dailyLimit - uses, 0);
 
   const navigate = (path: string) => {
     router.push(path);
@@ -156,14 +189,22 @@ export default function Home() {
       return;
     }
 
-    if (uses >= dailyLimit) {
-      setSuccessMessage(null);
-      setErrorMessage(
-        planId === "free"
-          ? "You have reached your free limit of 10 humanizations today."
-          : "You have reached your daily rewrite limit.",
-      );
-      return;
+    if (isFreePlan(planId)) {
+      if (dailyLimit != null && uses >= dailyLimit) {
+        setSuccessMessage(null);
+        setErrorMessage(
+          "You have reached your free limit of 10 humanizations today.",
+        );
+        return;
+      }
+    } else if (monthlyWordLimit != null) {
+      if (monthlyWordsUsed + wordCount > monthlyWordLimit) {
+        setSuccessMessage(null);
+        setErrorMessage(
+          `This text would exceed your monthly allowance of ${monthlyWordLimit.toLocaleString()} words.`,
+        );
+        return;
+      }
     }
 
     setLoading(true);
@@ -187,6 +228,11 @@ export default function Home() {
       const humanizedText =
         humanizeData.result || humanizeData.text || "Unable to humanize text.";
       setResult(humanizedText);
+
+      const outputWords = countWords(humanizedText);
+      if (!isFreePlan(planId)) {
+        setMonthlyWordsUsed((prev) => prev + outputWords);
+      }
 
       const today = new Date().toISOString().split("T")[0];
 
@@ -319,9 +365,8 @@ export default function Home() {
           onCloseMenu={() => setMenuOpen(false)}
           onNavigate={navigate}
           session={session}
-          uses={uses}
           planName={planName}
-          dailyLimit={dailyLimit}
+          usageLabel={usageLabel}
           getUserInitial={getUserInitial}
           onLogout={session ? handleLogout : undefined}
           activePath="/"
@@ -355,7 +400,7 @@ export default function Home() {
           copied={copied}
           errorMessage={errorMessage}
           successMessage={successMessage}
-          remaining={remaining}
+          usageBadge={usageBadge}
           planName={planName}
           wordCount={wordCount}
           charCount={charCount}
@@ -389,63 +434,58 @@ export default function Home() {
 
 const page = {
   minHeight: "100vh",
-  background: "#f8fafc",
-  color: "#0f172a",
   display: "flex",
+  background: "#f8fafc",
 };
 
 const content = {
   flex: 1,
+  minWidth: 0,
   width: "100%",
-  maxWidth: "1100px",
+};
+
+const heroSection = {
+  textAlign: "center" as const,
+  maxWidth: "640px",
   margin: "0 auto",
-  overflowX: "hidden" as const,
-  boxSizing: "border-box" as const,
 };
 
 const heroBadge = {
   display: "inline-block",
-  marginBottom: "14px",
-  padding: "5px 11px",
-  borderRadius: "999px",
-  border: "1px solid #e9d5ff",
   background: "#f5f3ff",
   color: "#6d28d9",
+  padding: "6px 12px",
+  borderRadius: "999px",
   fontSize: "12px",
   fontWeight: 600 as const,
+  marginBottom: "14px",
   letterSpacing: "0.02em",
-  lineHeight: 1.3,
 };
 
 const title = {
-  fontWeight: 700 as const,
-  margin: 0,
-  letterSpacing: "-0.025em",
+  margin: "0 0 10px",
   color: "#0f172a",
-  lineHeight: 1.2,
+  fontWeight: 700 as const,
+  letterSpacing: "-0.03em",
+  lineHeight: 1.15,
 };
 
 const subtitle = {
-  color: "#64748b",
-  margin: "12px 0 0",
-  fontSize: "16px",
-  lineHeight: 1.6,
-  maxWidth: "540px",
+  margin: "0 0 8px",
+  color: "#475569",
+  lineHeight: 1.55,
+  fontWeight: 500 as const,
 };
 
 const supportLine = {
+  margin: 0,
   color: "#94a3b8",
-  margin: "8px 0 0",
   fontSize: "14px",
-  lineHeight: 1.55,
-  maxWidth: "540px",
-};
-
-const heroSection = {
-  textAlign: "left" as const,
+  lineHeight: 1.5,
 };
 
 const landingArea = {
-  borderTop: "1px solid #e8eaf0",
-  width: "100%",
+  maxWidth: "920px",
+  margin: "0 auto",
+  borderTop: "1px solid #e2e8f0",
 };

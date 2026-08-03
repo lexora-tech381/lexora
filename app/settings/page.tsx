@@ -7,9 +7,12 @@ import { useRouter } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import {
+  countWords,
   formatPlanName,
-  getDailyRewriteLimit,
+  formatPlanUsageLabel,
+  getCalendarMonthStartIso,
   getPlanDetails,
+  isFreePlan,
   normalizePlanId,
   type PlanId,
 } from "@/lib/plan";
@@ -99,6 +102,7 @@ export default function SettingsPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [todayUsage, setTodayUsage] = useState(0);
+  const [monthlyWordsUsed, setMonthlyWordsUsed] = useState(0);
   const [planId, setPlanId] = useState<PlanId>("free");
   const [isMobile, setIsMobile] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -163,7 +167,8 @@ export default function SettingsPage() {
       );
 
       const today = new Date().toISOString().split("T")[0];
-      const [usageResult, profileResult] = await Promise.all([
+      const monthStart = getCalendarMonthStartIso();
+      const [usageResult, profileResult, wordsResult] = await Promise.all([
         supabase
           .from("usage")
           .select("count")
@@ -177,6 +182,11 @@ export default function SettingsPage() {
           .order("updated_at", { ascending: false })
           .limit(1)
           .maybeSingle(),
+        supabase
+          .from("documents")
+          .select("humanized_text")
+          .eq("user_id", currentSession.user.id)
+          .gte("created_at", monthStart),
       ]);
 
       if (usageResult.error) {
@@ -190,6 +200,18 @@ export default function SettingsPage() {
         if (isMounted) setPlanId("free");
       } else if (isMounted) {
         setPlanId(normalizePlanId(profileResult.data?.plan));
+      }
+
+      if (wordsResult.error) {
+        console.error("Settings monthly words error:", wordsResult.error);
+        if (isMounted) setMonthlyWordsUsed(0);
+      } else if (isMounted) {
+        const words = (wordsResult.data || []).reduce(
+          (sum, doc: { humanized_text: string | null }) =>
+            sum + countWords(doc.humanized_text),
+          0,
+        );
+        setMonthlyWordsUsed(words);
       }
 
       if (isMounted) setCheckingAuth(false);
@@ -225,8 +247,11 @@ export default function SettingsPage() {
 
   const planDetails = getPlanDetails(planId);
   const planName = formatPlanName(planId);
-  const dailyLimit = getDailyRewriteLimit(planId);
-  const isFreePlan = planId === "free";
+  const freePlan = isFreePlan(planId);
+  const usageLabel = formatPlanUsageLabel(planId, {
+    dailyRewrites: todayUsage,
+    monthlyWords: monthlyWordsUsed,
+  });
 
   const navigate = (path: string) => {
     router.push(path);
@@ -412,10 +437,9 @@ export default function SettingsPage() {
           onCloseMenu={() => setMenuOpen(false)}
           onNavigate={navigate}
           session={session}
-          uses={todayUsage}
           getUserInitial={getUserInitial}
           planName={planName}
-          dailyLimit={dailyLimit}
+          usageLabel={usageLabel}
           onLogout={handleLogout}
           activePath="/settings"
         />
@@ -707,10 +731,8 @@ export default function SettingsPage() {
                   <p style={planLabel}>Current access</p>
                   <p style={planValue}>{planName} plan</p>
                   <p style={cardText}>
-                    {isFreePlan
-                      ? `${dailyLimit} rewrites per day.`
-                      : planDetails.allowanceLabel}
-                    {isFreePlan
+                    {planDetails.allowanceLabel}.
+                    {freePlan
                       ? " Upgrade anytime from Pricing."
                       : " Managed through Polar billing."}
                   </p>
@@ -720,7 +742,7 @@ export default function SettingsPage() {
                   className="lexora-settings-outline"
                   style={outlineButton}
                 >
-                  {isFreePlan ? "View plans" : "Manage plan"}
+                  {freePlan ? "View plans" : "Manage plan"}
                 </Link>
               </div>
             </section>

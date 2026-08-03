@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { formatPlanUsageLabel } from "@/lib/plan";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import {
@@ -40,7 +41,6 @@ type SortOption =
 const PAGE_SIZE = 10;
 const TITLE_MAX_LENGTH = 120;
 const planName = "Free";
-const dailyLimit = 10;
 
 function countWords(value: string | null | undefined): number {
   if (!value || !value.trim()) return 0;
@@ -512,10 +512,11 @@ export default function DocumentsPage() {
           onCloseMenu={() => setMenuOpen(false)}
           onNavigate={navigate}
           session={session}
-          uses={todayUsage}
           getUserInitial={getUserInitial}
           planName={planName}
-          dailyLimit={dailyLimit}
+          usageLabel={formatPlanUsageLabel("free", {
+            dailyRewrites: todayUsage,
+          })}
           onLogout={handleLogout}
           activePath="/documents"
         />

@@ -5,6 +5,20 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import {
+  countWords,
+  formatPlanName,
+  formatPlanNumber,
+  formatPlanUsageLabel,
+  getCalendarMonthStartIso,
+  getDailyRewriteLimit,
+  getMonthlyWordLimit,
+  getPlanDetails,
+  getRemainingAllowance,
+  isFreePlan,
+  normalizePlanId,
+  type PlanId,
+} from "@/lib/plan";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import {
@@ -33,14 +47,6 @@ interface StatCardProps {
   value: string | number;
   note: string;
   tone?: "purple" | "green" | "orange" | "blue";
-}
-
-const planName = "Free";
-const dailyLimit = 10;
-
-function countWords(text: string | null | undefined): number {
-  if (!text || !text.trim()) return 0;
-  return text.trim().split(/\s+/).length;
 }
 
 function getUserInitial(user: User): string {
@@ -247,6 +253,8 @@ export default function UsagePage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [todayUsage, setTodayUsage] = useState(0);
+  const [monthlyWordsUsed, setMonthlyWordsUsed] = useState(0);
+  const [planId, setPlanId] = useState<PlanId>("free");
   const [documentsCount, setDocumentsCount] = useState(0);
   const [wordsProcessed, setWordsProcessed] = useState(0);
   const [weekUsage, setWeekUsage] = useState<DayUsage[]>([]);
@@ -301,7 +309,8 @@ export default function UsagePage() {
       const rangeStart = lastSevenKeys[0];
       let hasPartialError = false;
 
-      const [todayResult, docsResult, weekResult] = await Promise.all([
+      const [todayResult, docsResult, weekResult, subscriptionResult, monthDocsResult] =
+        await Promise.all([
         supabase
           .from("usage")
           .select("count")
@@ -318,6 +327,18 @@ export default function UsagePage() {
           .eq("user_id", userId)
           .gte("date", rangeStart)
           .lte("date", today),
+        supabase
+          .from("subscriptions")
+          .select("plan")
+          .eq("user_id", userId)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from("documents")
+          .select("humanized_text")
+          .eq("user_id", userId)
+          .gte("created_at", getCalendarMonthStartIso()),
       ]);
 
       if (todayResult.error) {
@@ -369,6 +390,27 @@ export default function UsagePage() {
         );
       }
 
+      if (subscriptionResult.error) {
+        console.error("Usage subscription error:", subscriptionResult.error);
+        hasPartialError = true;
+        if (isMounted) setPlanId("free");
+      } else if (isMounted) {
+        setPlanId(normalizePlanId(subscriptionResult.data?.plan));
+      }
+
+      if (monthDocsResult.error) {
+        console.error("Usage monthly words error:", monthDocsResult.error);
+        hasPartialError = true;
+        if (isMounted) setMonthlyWordsUsed(0);
+      } else if (isMounted) {
+        const words = (monthDocsResult.data || []).reduce(
+          (sum, doc: { humanized_text: string | null }) =>
+            sum + countWords(doc.humanized_text),
+          0,
+        );
+        setMonthlyWordsUsed(words);
+      }
+
       if (hasPartialError && isMounted) {
         setErrorMessage(
           "We could not load all usage information. Please refresh and try again.",
@@ -396,15 +438,32 @@ export default function UsagePage() {
     };
   }, [router]);
 
+  const planDetails = getPlanDetails(planId);
+  const planName = formatPlanName(planId);
+  const dailyLimit = getDailyRewriteLimit(planId);
+  const monthlyWordLimit = getMonthlyWordLimit(planId);
+  const freePlan = isFreePlan(planId);
+  const usageSnapshot = {
+    dailyRewrites: todayUsage,
+    monthlyWords: monthlyWordsUsed,
+  };
+  const usageLabel = formatPlanUsageLabel(planId, usageSnapshot);
+  const remainingAllowance = getRemainingAllowance(planId, usageSnapshot);
+  const usagePercent = freePlan
+    ? Math.min(
+        Math.round((todayUsage / Math.max(dailyLimit || 1, 1)) * 100),
+        100,
+      )
+    : Math.min(
+        Math.round(
+          (monthlyWordsUsed / Math.max(monthlyWordLimit || 1, 1)) * 100,
+        ),
+        100,
+      );
+
   const weekTotal = useMemo(
     () => weekUsage.reduce((sum, day) => sum + day.count, 0),
     [weekUsage],
-  );
-
-  const remainingUses = Math.max(dailyLimit - todayUsage, 0);
-  const usagePercent = Math.min(
-    Math.round((todayUsage / dailyLimit) * 100),
-    100,
   );
 
   const statsColumns = useMemo(() => {
@@ -476,10 +535,9 @@ export default function UsagePage() {
           onCloseMenu={() => setMenuOpen(false)}
           onNavigate={navigate}
           session={session}
-          uses={todayUsage}
           getUserInitial={getUserInitial}
           planName={planName}
-          dailyLimit={dailyLimit}
+          usageLabel={usageLabel}
           onLogout={handleLogout}
           activePath="/usage"
         />
@@ -502,7 +560,7 @@ export default function UsagePage() {
                 Usage
               </h1>
               <p style={subtitle}>
-                Track your real humanization activity, daily limit, and saved
+                Track your real humanization activity, plan allowance, and saved
                 document totals.
               </p>
             </div>
@@ -534,9 +592,17 @@ export default function UsagePage() {
           >
             <StatCard
               icon={<Activity size={20} aria-hidden />}
-              title="Today"
-              value={`${todayUsage} / ${dailyLimit}`}
-              note={`${usagePercent}% of daily limit`}
+              title={freePlan ? "Today" : "This month"}
+              value={
+                freePlan
+                  ? `${todayUsage} / ${dailyLimit}`
+                  : `${formatPlanNumber(monthlyWordsUsed)} / ${formatPlanNumber(monthlyWordLimit || 0)}`
+              }
+              note={
+                freePlan
+                  ? `${usagePercent}% of daily limit`
+                  : `${usagePercent}% of monthly word allowance`
+              }
               tone="purple"
             />
             <StatCard
@@ -555,9 +621,17 @@ export default function UsagePage() {
             />
             <StatCard
               icon={<Zap size={20} aria-hidden />}
-              title="Words in saved docs"
-              value={formatNumber(wordsProcessed)}
-              note="Based on saved rewritten text"
+              title={freePlan ? "Words in saved docs" : "Words remaining"}
+              value={
+                freePlan
+                  ? formatNumber(wordsProcessed)
+                  : formatPlanNumber(remainingAllowance)
+              }
+              note={
+                freePlan
+                  ? "Based on saved rewritten text"
+                  : planDetails.allowanceLabel
+              }
               tone="blue"
             />
           </section>
@@ -578,18 +652,16 @@ export default function UsagePage() {
                 <div>
                   <h2 style={cardTitle}>Current plan</h2>
                   <p style={cardMeta}>
-                    Plan status will update once billing verification is
-                    connected.
+                    Allowance and features come from your current subscription.
                   </p>
                 </div>
-                <span style={planBadge}>Free</span>
+                <span style={planBadge}>{planName}</span>
               </div>
 
               <ul style={planList}>
-                <li>{dailyLimit} humanizations per day</li>
-                <li>Save documents to your workspace</li>
-                <li>Standard processing</li>
-                <li>Usage tracking for your account</li>
+                {planDetails.features.map((feature) => (
+                  <li key={feature}>{feature}</li>
+                ))}
               </ul>
 
               <Link
@@ -612,9 +684,13 @@ export default function UsagePage() {
             <article style={panelCard}>
               <div style={cardHeader}>
                 <div>
-                  <h2 style={cardTitle}>Daily limit</h2>
+                  <h2 style={cardTitle}>
+                    {freePlan ? "Daily limit" : "Monthly word allowance"}
+                  </h2>
                   <p style={cardMeta}>
-                    Resets each day based on your account usage records.
+                    {freePlan
+                      ? "Resets each day based on your account usage records."
+                      : "Resets at the start of each calendar month based on saved rewritten text."}
                   </p>
                 </div>
                 <Clock size={20} color="#7c3aed" aria-hidden />
@@ -624,9 +700,15 @@ export default function UsagePage() {
                 style={progressTrack}
                 role="progressbar"
                 aria-valuemin={0}
-                aria-valuemax={dailyLimit}
-                aria-valuenow={todayUsage}
-                aria-label="Daily humanization usage"
+                aria-valuemax={
+                  freePlan ? dailyLimit || 10 : monthlyWordLimit || 0
+                }
+                aria-valuenow={freePlan ? todayUsage : monthlyWordsUsed}
+                aria-label={
+                  freePlan
+                    ? "Daily humanization usage"
+                    : "Monthly word usage"
+                }
               >
                 <div
                   style={{
@@ -637,12 +719,18 @@ export default function UsagePage() {
               </div>
 
               <p style={progressPrimary}>
-                {todayUsage} of {dailyLimit} uses today
+                {freePlan
+                  ? `${todayUsage} of ${dailyLimit} uses today`
+                  : `${formatPlanNumber(monthlyWordsUsed)} of ${formatPlanNumber(monthlyWordLimit || 0)} words this month`}
               </p>
               <p style={progressNote}>
-                {remainingUses === 0
-                  ? "You have reached today’s Free plan limit."
-                  : `${remainingUses} remaining today.`}
+                {remainingAllowance === 0
+                  ? freePlan
+                    ? "You have reached today’s Free plan limit."
+                    : "You have reached this month’s word allowance."
+                  : freePlan
+                    ? `${remainingAllowance} remaining today.`
+                    : `${formatPlanNumber(remainingAllowance)} words remaining this month.`}
               </p>
             </article>
 

@@ -5,9 +5,16 @@ import { useRouter } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import {
+  countWords,
   formatPlanName,
+  formatPlanNumber,
+  formatPlanUsageLabel,
+  getCalendarMonthStartIso,
   getDailyRewriteLimit,
+  getMonthlyWordLimit,
   getPlanDetails,
+  getRemainingAllowance,
+  isFreePlan as checkIsFreePlan,
   normalizePlanId,
   type PlanId,
 } from "@/lib/plan";
@@ -46,11 +53,6 @@ interface StatCardProps {
   value: string | number;
   note: string;
   tone?: "purple" | "green" | "orange" | "blue";
-}
-
-function countWords(text: string | null | undefined): number {
-  if (!text || !text.trim()) return 0;
-  return text.trim().split(/\s+/).length;
 }
 
 function getUserInitial(user: User): string {
@@ -237,18 +239,27 @@ function UsageProgress({
   todayUsage,
   remainingUses,
   dailyLimit,
+  monthlyWordsUsed,
+  monthlyWordLimit,
+  remainingWords,
   isFreePlan,
   allowanceLabel,
 }: {
   todayUsage: number;
   remainingUses: number;
-  dailyLimit: number;
+  dailyLimit: number | null;
+  monthlyWordsUsed: number;
+  monthlyWordLimit: number | null;
+  remainingWords: number;
   isFreePlan: boolean;
   allowanceLabel: string;
 }) {
   const percent = isFreePlan
-    ? Math.min((todayUsage / Math.max(dailyLimit, 1)) * 100, 100)
-    : Math.min(todayUsage > 0 ? 35 : 8, 100);
+    ? Math.min((todayUsage / Math.max(dailyLimit || 1, 1)) * 100, 100)
+    : Math.min(
+        (monthlyWordsUsed / Math.max(monthlyWordLimit || 1, 1)) * 100,
+        100,
+      );
   const radius = 42;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (percent / 100) * circumference;
@@ -285,25 +296,25 @@ function UsageProgress({
             fontWeight="700"
             fill="#0f172a"
           >
-            {isFreePlan ? `${Math.round(percent)}%` : todayUsage}
+            {`${Math.round(percent)}%`}
           </text>
         </svg>
       </div>
 
       <div style={{ minWidth: 0, flex: 1 }}>
-        <h2 style={cardTitle}>{isFreePlan ? "Daily usage" : "Plan usage"}</h2>
+        <h2 style={cardTitle}>{isFreePlan ? "Daily usage" : "Monthly usage"}</h2>
         <p style={usagePrimary}>
           {isFreePlan
             ? `You have used ${todayUsage} of ${dailyLimit} daily rewrites.`
-            : `Your plan includes ${allowanceLabel}.`}
+            : `You have used ${formatPlanNumber(monthlyWordsUsed)} of ${formatPlanNumber(monthlyWordLimit || 0)} words this month.`}
         </p>
         <p style={mutedText}>
           {isFreePlan
             ? `${remainingUses} remaining today`
-            : `${todayUsage} rewrites used today`}
+            : `${formatPlanNumber(remainingWords)} words remaining · ${allowanceLabel}`}
         </p>
         <p style={resetText}>
-          {isFreePlan ? "Resets tomorrow" : "Billing cycle renews with Polar"}
+          {isFreePlan ? "Resets tomorrow" : "Resets at the start of each month"}
         </p>
       </div>
     </article>
@@ -408,6 +419,7 @@ export default function DashboardPage() {
   const [planId, setPlanId] = useState<PlanId>("free");
   const [documentsCount, setDocumentsCount] = useState(0);
   const [totalWords, setTotalWords] = useState(0);
+  const [monthlyWordsUsed, setMonthlyWordsUsed] = useState(0);
   const [todayUsage, setTodayUsage] = useState(0);
   const [recentDocuments, setRecentDocuments] = useState<RecentDocument[]>([]);
   const [weekUsage, setWeekUsage] = useState<DayUsage[]>([]);
@@ -471,7 +483,7 @@ export default function DashboardPage() {
             .eq("user_id", userId),
           supabase
             .from("documents")
-            .select("humanized_text")
+            .select("humanized_text, created_at")
             .eq("user_id", userId),
           supabase
             .from("usage")
@@ -519,12 +531,23 @@ export default function DashboardPage() {
         console.error("Dashboard words error:", wordsResult.error);
         hasPartialError = true;
       } else if (isMounted) {
-        const words = (wordsResult.data || []).reduce(
-          (sum, doc: { humanized_text: string | null }) =>
-            sum + countWords(doc.humanized_text),
-          0,
-        );
-        setTotalWords(words);
+        const monthStart = getCalendarMonthStartIso();
+        let allWords = 0;
+        let monthWords = 0;
+
+        for (const doc of wordsResult.data || []) {
+          const words = countWords(
+            (doc as { humanized_text: string | null }).humanized_text,
+          );
+          allWords += words;
+          const createdAt = (doc as { created_at: string | null }).created_at;
+          if (createdAt && createdAt >= monthStart) {
+            monthWords += words;
+          }
+        }
+
+        setTotalWords(allWords);
+        setMonthlyWordsUsed(monthWords);
       }
 
       if (todayResult.error) {
@@ -598,10 +621,17 @@ export default function DashboardPage() {
   const planDetails = getPlanDetails(planId);
   const planName = formatPlanName(planId);
   const dailyLimit = getDailyRewriteLimit(planId);
-  const isFreePlan = planId === "free";
-  const remainingUses = isFreePlan
-    ? Math.max(dailyLimit - todayUsage, 0)
-    : todayUsage;
+  const monthlyWordLimit = getMonthlyWordLimit(planId);
+  const isFreePlan = checkIsFreePlan(planId);
+  const usageSnapshot = {
+    dailyRewrites: todayUsage,
+    monthlyWords: monthlyWordsUsed,
+  };
+  const usageLabel = formatPlanUsageLabel(planId, usageSnapshot);
+  const remainingUses = getRemainingAllowance(planId, usageSnapshot);
+  const remainingWords = isFreePlan
+    ? 0
+    : getRemainingAllowance(planId, usageSnapshot);
 
   const statsColumns = useMemo(() => {
     if (isMobile) return "1fr";
@@ -655,10 +685,9 @@ export default function DashboardPage() {
           onCloseMenu={() => setMenuOpen(false)}
           onNavigate={navigate}
           session={session}
-          uses={todayUsage}
           getUserInitial={getUserInitial}
           planName={planName}
-          dailyLimit={dailyLimit}
+          usageLabel={usageLabel}
           onLogout={handleLogout}
           activePath="/dashboard"
         />
@@ -692,9 +721,7 @@ export default function DashboardPage() {
               <div style={headerMeta}>
                 <span style={planBadge}>{planName} Plan</span>
                 <span style={usageBadge}>
-                  {isFreePlan
-                    ? `${todayUsage} / ${dailyLimit} uses today`
-                    : planDetails.allowanceLabel}
+                  {usageLabel}
                 </span>
                 {session ? (
                   <div style={avatar} aria-label="Account">
@@ -740,9 +767,17 @@ export default function DashboardPage() {
               />
               <StatCard
                 icon={<Clock size={20} />}
-                title={isFreePlan ? "Remaining Uses" : "Plan Allowance"}
-                value={isFreePlan ? remainingUses : planDetails.allowanceLabel}
-                note={isFreePlan ? `of ${dailyLimit} today` : `${planName} access`}
+                title={isFreePlan ? "Remaining Uses" : "Words Remaining"}
+                value={
+                  isFreePlan
+                    ? remainingUses
+                    : formatPlanNumber(remainingWords)
+                }
+                note={
+                  isFreePlan
+                    ? `of ${dailyLimit} today`
+                    : `of ${formatPlanNumber(monthlyWordLimit || 0)} this month`
+                }
                 tone="blue"
               />
             </section>
@@ -774,6 +809,9 @@ export default function DashboardPage() {
                 todayUsage={todayUsage}
                 remainingUses={remainingUses}
                 dailyLimit={dailyLimit}
+                monthlyWordsUsed={monthlyWordsUsed}
+                monthlyWordLimit={monthlyWordLimit}
+                remainingWords={remainingWords}
                 isFreePlan={isFreePlan}
                 allowanceLabel={planDetails.allowanceLabel}
               />
