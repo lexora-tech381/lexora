@@ -11,6 +11,7 @@ type HumanizerToolProps = {
   errorMessage: string | null;
   successMessage?: string | null;
   remaining: number;
+  planName: string;
   wordCount: number;
   charCount: number;
   resultWords: number;
@@ -38,6 +39,7 @@ export default function HumanizerTool({
   errorMessage,
   successMessage,
   remaining,
+  planName,
   wordCount,
   charCount,
   resultWords,
@@ -168,7 +170,7 @@ export default function HumanizerTool({
         }}
       >
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
-          <span style={statusMuted}>Free plan</span>
+          <span style={statusMuted}>{planName} plan</span>
           <span style={freePill}>{remaining} uses left today</span>
         </div>
         <span style={{ ...secure, marginLeft: isMobile ? 0 : "auto" }}>

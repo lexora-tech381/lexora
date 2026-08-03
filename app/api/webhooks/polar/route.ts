@@ -100,15 +100,17 @@ function resolveUserId(subscription: Subscription): string | null {
 }
 
 function resolvePaidPlan(subscription: Subscription): PaidPlanId | null {
+  // Prefer checkout metadata when present so colliding product IDs cannot
+  // overwrite the plan the user actually selected.
+  const metadataPlan = subscription.metadata?.plan;
+  if (isPaidPlanId(metadataPlan)) {
+    return metadataPlan;
+  }
+
   const productMap = getProductPlanMap();
   const productPlan = productMap[subscription.productId];
   if (productPlan) {
     return productPlan;
-  }
-
-  const metadataPlan = subscription.metadata?.plan;
-  if (isPaidPlanId(metadataPlan)) {
-    return metadataPlan;
   }
 
   return null;

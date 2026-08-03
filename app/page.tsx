@@ -4,6 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import {
+  formatPlanName,
+  getDailyRewriteLimit,
+  normalizePlanId,
+  type PlanId,
+} from "@/lib/plan";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import HumanizerTool from "@/components/HumanizerTool";
@@ -19,6 +25,7 @@ export default function Home() {
   const [mode, setMode] = useState("Free");
   const [tone, setTone] = useState("Natural");
   const [uses, setUses] = useState(0);
+  const [planId, setPlanId] = useState<PlanId>("free");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -44,19 +51,39 @@ export default function Home() {
 
       if (currentSession) {
         const today = new Date().toISOString().split("T")[0];
+        const userId = currentSession.user.id;
 
-        const { data, error } = await supabase
-          .from("usage")
-          .select("count")
-          .eq("user_id", currentSession.user.id)
-          .eq("date", today)
-          .maybeSingle();
+        const [usageResult, subscriptionResult] = await Promise.all([
+          supabase
+            .from("usage")
+            .select("count")
+            .eq("user_id", userId)
+            .eq("date", today)
+            .maybeSingle(),
+          supabase
+            .from("subscriptions")
+            .select("plan")
+            .eq("user_id", userId)
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+        ]);
 
-        if (error) {
-          console.log("Usage load error:", error);
+        if (usageResult.error) {
+          console.log("Usage load error:", usageResult.error);
         }
 
-        setUses(data?.count || 0);
+        if (subscriptionResult.error) {
+          console.log("Subscription load error:", subscriptionResult.error);
+          setPlanId("free");
+        } else {
+          setPlanId(normalizePlanId(subscriptionResult.data?.plan));
+        }
+
+        setUses(usageResult.data?.count || 0);
+      } else {
+        setPlanId("free");
+        setUses(0);
       }
     };
 
@@ -66,6 +93,10 @@ export default function Home() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       setSession(currentSession);
+      if (!currentSession) {
+        setPlanId("free");
+        setUses(0);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -84,11 +115,13 @@ export default function Home() {
     return "U";
   }
 
+  const dailyLimit = getDailyRewriteLimit(planId);
+  const planName = formatPlanName(planId);
   const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
   const charCount = text.length;
   const resultWords = result.trim() ? result.trim().split(/\s+/).length : 0;
   const resultChars = result.length;
-  const remaining = Math.max(10 - uses, 0);
+  const remaining = Math.max(dailyLimit - uses, 0);
 
   const navigate = (path: string) => {
     router.push(path);
@@ -123,9 +156,13 @@ export default function Home() {
       return;
     }
 
-    if (uses >= 10) {
+    if (uses >= dailyLimit) {
       setSuccessMessage(null);
-      setErrorMessage("You have reached your free limit of 10 humanizations today.");
+      setErrorMessage(
+        planId === "free"
+          ? "You have reached your free limit of 10 humanizations today."
+          : "You have reached your daily rewrite limit.",
+      );
       return;
     }
 
@@ -283,6 +320,8 @@ export default function Home() {
           onNavigate={navigate}
           session={session}
           uses={uses}
+          planName={planName}
+          dailyLimit={dailyLimit}
           getUserInitial={getUserInitial}
           onLogout={session ? handleLogout : undefined}
           activePath="/"
@@ -317,6 +356,7 @@ export default function Home() {
           errorMessage={errorMessage}
           successMessage={successMessage}
           remaining={remaining}
+          planName={planName}
           wordCount={wordCount}
           charCount={charCount}
           resultWords={resultWords}
