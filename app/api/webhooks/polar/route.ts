@@ -268,9 +268,18 @@ export async function POST(req: Request) {
       { status: 202 },
     );
   } catch (error) {
-    console.error("Polar webhook processing failed:", error);
+    console.error("========== POLAR WEBHOOK ERROR ==========");
+    console.error(error);
+  
+    if (error instanceof Error) {
+      console.error(error.message);
+      console.error(error.stack);
+    }
+  
     return NextResponse.json(
-      { error: "Webhook processing failed." },
+      {
+        error: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 },
     );
   }
