@@ -40,6 +40,8 @@ export default function Home() {
   const [session, setSession] = useState<Session | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  /** Prevents a second insert for the same humanized result (auto-save + Save button). */
+  const [persistedResult, setPersistedResult] = useState<string | null>(null);
 
   useEffect(() => {
     const checkScreen = () => setIsMobile(window.innerWidth < 768);
@@ -165,6 +167,44 @@ export default function Home() {
     router.push("/login");
   };
 
+  async function reloadMonthlyWordsUsed(userId: string) {
+    const { data, error } = await supabase
+      .from("documents")
+      .select("humanized_text")
+      .eq("user_id", userId)
+      .gte("created_at", getCalendarMonthStartIso());
+
+    if (error) {
+      console.error("Monthly words reload error:", error);
+      return null;
+    }
+
+    return (data || []).reduce(
+      (sum, doc: { humanized_text: string | null }) =>
+        sum + countWords(doc.humanized_text),
+      0,
+    );
+  }
+
+  async function persistDocument(params: {
+    userId: string;
+    originalText: string;
+    humanizedText: string;
+  }) {
+    const { error } = await supabase.from("documents").insert({
+      user_id: params.userId,
+      original_text: params.originalText,
+      humanized_text: params.humanizedText,
+    });
+
+    if (error) {
+      console.error("Document save error:", error);
+      return error;
+    }
+
+    return null;
+  }
+
   const humanizeText = async () => {
     if (loading) return;
 
@@ -184,7 +224,7 @@ export default function Home() {
       setSession(currentSession);
     }
 
-    if (!activeSession) {
+    if (!activeSession?.user?.id) {
       router.push("/login");
       return;
     }
@@ -210,6 +250,7 @@ export default function Home() {
     setLoading(true);
     setErrorMessage(null);
     setSuccessMessage(null);
+    setPersistedResult(null);
 
     try {
       const response = await fetch("/api/humanize", {
@@ -229,9 +270,27 @@ export default function Home() {
         humanizeData.result || humanizeData.text || "Unable to humanize text.";
       setResult(humanizedText);
 
-      const outputWords = countWords(humanizedText);
-      if (!isFreePlan(planId)) {
-        setMonthlyWordsUsed((prev) => prev + outputWords);
+      const insertError = await persistDocument({
+        userId: activeSession.user.id,
+        originalText: text,
+        humanizedText,
+      });
+
+      if (insertError) {
+        setErrorMessage(
+          insertError.message ||
+            "Humanization succeeded, but the document could not be saved. Please try Save again.",
+        );
+        return;
+      }
+
+      setPersistedResult(humanizedText);
+
+      const refreshedWords = await reloadMonthlyWordsUsed(
+        activeSession.user.id,
+      );
+      if (refreshedWords != null) {
+        setMonthlyWordsUsed(refreshedWords);
       }
 
       const today = new Date().toISOString().split("T")[0];
@@ -276,6 +335,7 @@ export default function Home() {
   const clearText = () => {
     setText("");
     setResult("");
+    setPersistedResult(null);
     setCopied(false);
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -312,7 +372,7 @@ export default function Home() {
       setSession(currentSession);
     }
 
-    if (!activeSession) {
+    if (!activeSession?.user?.id) {
       router.push("/login");
       return;
     }
@@ -320,15 +380,28 @@ export default function Home() {
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    const { error: insertError } = await supabase.from("documents").insert({
-      user_id: activeSession.user.id,
-      original_text: text,
-      humanized_text: result,
+    if (persistedResult === result) {
+      setSuccessMessage("Document saved.");
+      setTimeout(() => setSuccessMessage(null), 3000);
+      return;
+    }
+
+    const insertError = await persistDocument({
+      userId: activeSession.user.id,
+      originalText: text,
+      humanizedText: result,
     });
 
     if (insertError) {
       setErrorMessage(insertError.message);
       return;
+    }
+
+    setPersistedResult(result);
+
+    const refreshedWords = await reloadMonthlyWordsUsed(activeSession.user.id);
+    if (refreshedWords != null) {
+      setMonthlyWordsUsed(refreshedWords);
     }
 
     setSuccessMessage("Document saved.");
