@@ -104,6 +104,12 @@ export default function SettingsPage() {
   const [todayUsage, setTodayUsage] = useState(0);
   const [monthlyWordsUsed, setMonthlyWordsUsed] = useState(0);
   const [planId, setPlanId] = useState<PlanId>("free");
+  const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
+  const [currentPeriodEnd, setCurrentPeriodEnd] = useState<string | null>(null);
+  const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+  const [billingPortalError, setBillingPortalError] = useState<string | null>(
+    null,
+  );
   const [isMobile, setIsMobile] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -177,7 +183,7 @@ export default function SettingsPage() {
           .maybeSingle(),
         supabase
           .from("subscriptions")
-          .select("plan, status, current_period_end")
+          .select("plan, status, current_period_end, cancel_at_period_end")
           .eq("user_id", currentSession.user.id)
           .order("updated_at", { ascending: false })
           .limit(1)
@@ -197,9 +203,21 @@ export default function SettingsPage() {
 
       if (profileResult.error) {
         console.error("Settings subscription error:", profileResult.error);
-        if (isMounted) setPlanId("free");
+        if (isMounted) {
+          setPlanId("free");
+          setCancelAtPeriodEnd(false);
+          setCurrentPeriodEnd(null);
+        }
       } else if (isMounted) {
         setPlanId(normalizePlanId(profileResult.data?.plan));
+        setCancelAtPeriodEnd(
+          Boolean(profileResult.data?.cancel_at_period_end),
+        );
+        setCurrentPeriodEnd(
+          typeof profileResult.data?.current_period_end === "string"
+            ? profileResult.data.current_period_end
+            : null,
+        );
       }
 
       if (wordsResult.error) {
@@ -272,6 +290,93 @@ export default function SettingsPage() {
 
     router.replace("/login");
   };
+
+  function formatPeriodEndDate(value: string | null): string | null {
+    if (!value) return null;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  }
+
+  async function openBillingPortal() {
+    if (isOpeningPortal) return;
+
+    setBillingPortalError(null);
+    setIsOpeningPortal(true);
+
+    try {
+      const {
+        data: { session: currentSession },
+      } = await supabase.auth.getSession();
+
+      if (!currentSession?.access_token) {
+        setIsOpeningPortal(false);
+        router.push("/login");
+        return;
+      }
+
+      const response = await fetch("/api/billing/portal", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${currentSession.access_token}`,
+        },
+        redirect: "manual",
+      });
+
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get("Location");
+        if (location) {
+          window.location.href = location;
+          return;
+        }
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        const data = (await response.json().catch(() => null)) as {
+          error?: unknown;
+          url?: unknown;
+        } | null;
+
+        if (typeof data?.url === "string" && data.url) {
+          window.location.href = data.url;
+          return;
+        }
+
+        if (response.status === 401) {
+          router.push("/login");
+          return;
+        }
+
+        setBillingPortalError(
+          typeof data?.error === "string"
+            ? data.error
+            : "We could not open the billing portal. Please try again.",
+        );
+        return;
+      }
+
+      if (response.status === 401) {
+        router.push("/login");
+        return;
+      }
+
+      setBillingPortalError(
+        "We could not open the billing portal. Please try again.",
+      );
+    } catch (error) {
+      console.error("Billing portal open error:", error);
+      setBillingPortalError(
+        "We could not open the billing portal. Please try again.",
+      );
+    } finally {
+      setIsOpeningPortal(false);
+    }
+  }
 
   async function handleSaveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -727,23 +832,66 @@ export default function SettingsPage() {
               </div>
 
               <div style={planBox}>
-                <div>
+                <div style={{ minWidth: 0, flex: 1 }}>
                   <p style={planLabel}>Current access</p>
                   <p style={planValue}>{planName} plan</p>
-                  <p style={cardText}>
-                    {planDetails.allowanceLabel}.
-                    {freePlan
-                      ? " Upgrade anytime from Pricing."
-                      : " Managed through Polar billing."}
-                  </p>
+                  {freePlan ? (
+                    <p style={cardText}>
+                      {planDetails.allowanceLabel}. Upgrade anytime from
+                      Pricing.
+                    </p>
+                  ) : cancelAtPeriodEnd ? (
+                    <>
+                      <p style={cancellationTitle}>Cancellation scheduled</p>
+                      <p style={cardText}>
+                        Your subscription will remain active until{" "}
+                        {formatPeriodEndDate(currentPeriodEnd) ||
+                          "the end of the current billing period"}
+                        .
+                      </p>
+                    </>
+                  ) : (
+                    <p style={cardText}>
+                      {planDetails.allowanceLabel}. Managed through Polar
+                      billing.
+                    </p>
+                  )}
+                  {!freePlan ? (
+                    <p style={portalHelperText}>
+                      {cancelAtPeriodEnd
+                        ? "You can update billing or undo cancellation in the Polar customer portal."
+                        : "Manage your payment method, billing, or cancel your subscription."}
+                    </p>
+                  ) : null}
+                  {billingPortalError ? (
+                    <p style={portalErrorText} role="alert">
+                      {billingPortalError}
+                    </p>
+                  ) : null}
                 </div>
-                <Link
-                  href="/pricing"
-                  className="lexora-settings-outline"
-                  style={outlineButton}
-                >
-                  {freePlan ? "View plans" : "Manage plan"}
-                </Link>
+                {freePlan ? (
+                  <Link
+                    href="/pricing"
+                    className="lexora-settings-outline"
+                    style={outlineButton}
+                  >
+                    View plans
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    className="lexora-settings-outline"
+                    onClick={openBillingPortal}
+                    disabled={isOpeningPortal}
+                    style={{
+                      ...outlineButton,
+                      opacity: isOpeningPortal ? 0.7 : 1,
+                      cursor: isOpeningPortal ? "wait" : "pointer",
+                    }}
+                  >
+                    {isOpeningPortal ? "Opening..." : "Manage Subscription"}
+                  </button>
+                )}
               </div>
             </section>
 
@@ -1085,6 +1233,27 @@ const planValue = {
   fontSize: "20px",
   fontWeight: 700 as const,
   color: "#0f172a",
+};
+
+const cancellationTitle = {
+  margin: "0 0 4px",
+  color: "#b45309",
+  fontSize: "14px",
+  fontWeight: 700 as const,
+};
+
+const portalHelperText = {
+  margin: "10px 0 0",
+  color: "#64748b",
+  fontSize: "13px",
+  lineHeight: 1.45,
+};
+
+const portalErrorText = {
+  margin: "10px 0 0",
+  color: "#b91c1c",
+  fontSize: "13px",
+  lineHeight: 1.45,
 };
 
 const accountStack = {
