@@ -21,10 +21,10 @@ const PARAGRAPH_TRANSITION_INSERTS = [
 const ACTIVE_VERB_STARTERS =
   /^(improve|find|enhance|reduce|support|enable|create|build|maintain|deliver|provide|offer|allow|require|include|involve|produce|drive|shape|reflect|indicate|demonstrate|operate|function|strengthen|increase|help|work|lead|promote|train|focus|balance|develop|establish|ensure|yield|generate|optimize|mitigate|foster|nurture|blunt|temper|prompt|achieve|gain|restore|protect|guide|manage|organize|clarify|simplify|expand|strengthen)\b/i;
 
-const ADVERSARIAL_STYLE_CORE =
-  "You are an elite institutional expert delivering an analytical critique of a draft. You must actively break linear machine prose loops and predictable textbook symmetry. Never organize arguments symmetrically. Mix core definitions with practical, sharp conclusions. Use highly volatile sentence variance—alternating between short structural assertions and dense compound thoughts wrapped in semicolons. Avoid predictable transitional loops like 'Furthermore', 'Moreover', and 'In conclusion'.";
+const NATURAL_REWRITE_CORE =
+  "Rewrite the user's text so it reads naturally, clearly, and fluently while preserving the original meaning and factual information.";
 
-const EXECUTIVE_FALLBACK_PERSONA = `${ADVERSARIAL_STYLE_CORE} Write as a senior corporate analyst delivering a critical market whitepaper. Maintain highly polished, business-aware terminology, but introduce natural structural asymmetry throughout the prose.`;
+const EXECUTIVE_FALLBACK_PERSONA = `${NATURAL_REWRITE_CORE} Keep a professional tone: clear, precise, and polished without sounding stiff or robotic.`;
 
 function resolveStructuralStyle(styleKey: unknown): string {
   if (typeof styleKey !== "string" || styleKey.trim().length === 0) {
@@ -34,7 +34,7 @@ function resolveStructuralStyle(styleKey: unknown): string {
   const normalized = styleKey.trim();
 
   if (normalized === "Academic") {
-    return `${ADVERSARIAL_STYLE_CORE} Write as an expert academic scholar delivering an investigative analysis. Keep terminology highly sophisticated, dense, and intellectually authoritative without conforming to standard textbook templates.`;
+    return `${NATURAL_REWRITE_CORE} Keep an academically appropriate tone: thoughtful and precise, without sounding formulaic or artificially dense.`;
   }
 
   if (normalized === "Professional") {
@@ -46,7 +46,7 @@ function resolveStructuralStyle(styleKey: unknown): string {
     normalized === "Simple" ||
     normalized === "Natural"
   ) {
-    return `${ADVERSARIAL_STYLE_CORE} Write as a clear, direct corporate communicator. Prefer precise, transparent explanations while entirely bypassing machine rhythmic patterns.`;
+    return `${NATURAL_REWRITE_CORE} Keep a natural, approachable tone when the source allows it, without becoming excessively casual.`;
   }
 
   return EXECUTIVE_FALLBACK_PERSONA;
@@ -421,15 +421,28 @@ function buildParagraphPrompt(
 
 You are rewriting paragraph ${paragraphIndex + 1} of ${totalParagraphs} from a larger document. Preserve this as exactly one paragraph.
 
-CRITICAL HUMAN BYPASS LAWS:
-- Structural Preservation: Output exactly one paragraph. Do not compress or truncate the core information.
-- Content Integrity: Rewrite every single concept, point, and supporting detail fully. Do not omit points to save space, and do not summarize multiple thoughts into one sentence. You must match the comprehensive depth of the input text exactly, using professional terminology.
-- Equal Density Phrasing: You must rewrite this isolated paragraph by fully preserving every single factual detail, idea, and concept from the source text. Do not compress multiple sentences into short summaries, and do not delete any points.
-- Length Stability: Your rewritten output paragraph must match the comprehensive depth, sentence flow, and approximate size of the provided input text block exactly (Aim for a 1:1 length ratio). Maintain a highly polished, professional vocabulary without introducing fictional scenarios or shortening the descriptions. Target about ${paragraphWordCount} words.
-- Zero Fictional Padding: Focus purely on humanizing the factual flow of the text provided. Do not invent external story scenarios, background settings, or sensory descriptions (such as office environments, squeaking chairs, or external noises).
-- Write with unpredictable human structural flows, balancing concise multi-clause thoughts with brief 5-word declarations to shatter standard machine prose loops.
-- Ensure all sophisticated corporate or academic terms are used with native fluency, avoiding linear list groups or structured conclusion summaries.
-- Return ONLY the finalized rewritten paragraph content. Do not output chat text, notes, markdown formatting headers, or commentary.
+Rewrite the user's text so it reads naturally, clearly, and fluently while preserving the original meaning and factual information.
+
+Requirements:
+1. Simplify overly formal or unnecessarily sophisticated vocabulary when a simpler natural word works better.
+2. Vary sentence length and sentence structure naturally.
+3. Avoid repetitive sentence patterns.
+4. Avoid repetitive transitions and formulaic phrasing.
+5. Make the writing flow naturally from one idea to the next.
+6. Preserve the original meaning, facts, examples, numbers, names, citations, and technical terminology.
+7. Never intentionally introduce grammar mistakes, spelling mistakes, awkward phrasing, or incorrect English.
+8. Do not make every sentence short.
+9. Do not make the text excessively casual or conversational unless the original tone is casual.
+10. Avoid filler phrases such as "you know", "basically", "like", etc. unless they genuinely fit the context.
+11. Remove unnecessary repetition.
+12. Restructure sentences when it improves clarity and natural flow.
+13. Do not add facts or information that were not in the original text.
+14. Preserve the appropriate tone of the original text. Academic text should remain academically appropriate, professional text should remain professional, and casual text should remain casual.
+15. The final result should be fluent, coherent, natural, and readable rather than mechanically paraphrased.
+
+Keep roughly the same depth and coverage as the source paragraph. Target about ${paragraphWordCount} words. Rewrite the ideas fully. Do not summarize away supporting details, and do not invent extra content.
+
+Return ONLY the rewritten text.
 
 Text block to rewrite:
 ${paragraphText}`;
