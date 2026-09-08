@@ -1,0 +1,584 @@
+[1mdiff --git a/app/api/humanize/route.ts b/app/api/humanize/route.ts[m
+[1mindex 13b8d37..f7fb97a 100644[m
+[1m--- a/app/api/humanize/route.ts[m
+[1m+++ b/app/api/humanize/route.ts[m
+[36m@@ -1,478 +1,10 @@[m
+[31m-import { GoogleGenAI } from "@google/genai";[m
+ import { NextResponse } from "next/server";[m
+[32m+[m[32mimport { runHumanizePipeline } from "@/lib/humanize/pipeline";[m
+ [m
+[31m-const ai = new GoogleGenAI({[m
+[31m-  apiKey: process.env.GEMINI_API_KEY!,[m
+[31m-});[m
+[32m+[m[32mexport const runtime = "nodejs";[m
+ [m
+[31m-const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";[m
+[31m-const MAX_TEXT_LENGTH = 12000;[m
+[31m-[m
+[31m-const CONJUNCTION_PATTERN = /\s+(and|but|so|or|because)\s+/gi;[m
+[31m-[m
+[31m-const PARAGRAPH_TRANSITION_INSERTS = [[m
+[31m-  " — a metric that explicitly reveals why ",[m
+[31m-  " — which, from a tactical execution angle, means that ",[m
+[31m-  " — a shift driven heavily by the fact that ",[m
+[31m-  " — an operational factor that becomes evident when ",[m
+[31m-  " — showing a clean correlation to the way ",[m
+[31m-] as const;[m
+[31m-[m
+[31m-const ACTIVE_VERB_STARTERS =[m
+[31m-  /^(improve|find|enhance|reduce|support|enable|create|build|maintain|deliver|provide|offer|allow|require|include|involve|produce|drive|shape|reflect|indicate|demonstrate|operate|function|strengthen|increase|help|work|lead|promote|train|focus|balance|develop|establish|ensure|yield|generate|optimize|mitigate|foster|nurture|blunt|temper|prompt|achieve|gain|restore|protect|guide|manage|organize|clarify|simplify|expand|strengthen)\b/i;[m
+[31m-[m
+[31m-const NATURAL_REWRITE_CORE =[m
+[31m-  "Rewrite the writing naturally WITHOUT losing, changing, inventing, or rearranging important information.";[m
+[31m-[m
+[31m-const EXECUTIVE_FALLBACK_PERSONA = `${NATURAL_REWRITE_CORE} Keep the writing appropriate for professional contexts. Do not make it sound like casual conversation.`;[m
+[31m-[m
+[31m-function resolveStructuralStyle(styleKey: unknown): string {[m
+[31m-  if (typeof styleKey !== "string" || styleKey.trim().length === 0) {[m
+[31m-    return EXECUTIVE_FALLBACK_PERSONA;[m
+[31m-  }[m
+[31m-[m
+[31m-  const normalized = styleKey.trim();[m
+[31m-[m
+[31m-  if (normalized === "Academic") {[m
+[31m-    return `${NATURAL_REWRITE_CORE} Keep the writing appropriate for academic contexts. Do not make academic writing sound like casual conversation.`;[m
+[31m-  }[m
+[31m-[m
+[31m-  if (normalized === "Professional") {[m
+[31m-    return EXECUTIVE_FALLBACK_PERSONA;[m
+[31m-  }[m
+[31m-[m
+[31m-  if ([m
+[31m-    normalized === "Friendly" ||[m
+[31m-    normalized === "Simple" ||[m
+[31m-    normalized === "Natural"[m
+[31m-  ) {[m
+[31m-    return `${NATURAL_REWRITE_CORE} Preserve the original tone. If the source is academic or professional, keep it that way. Only keep a lighter tone when the original is already casual.`;[m
+[31m-  }[m
+[31m-[m
+[31m-  return EXECUTIVE_FALLBACK_PERSONA;[m
+[31m-}[m
+[31m-[m
+[31m-function applyVocabularyRandomization(text: string): string {[m
+[31m-  // Longer high-risk expansion markers first, then broader corporate/academic scrub list[m
+[31m-  const vocabularyMap: Array<[string, string]> = [[m
+[31m-    ["which in turn enables", "directly allowing"],[m
+[31m-    ["a reality highlighting why", "highlighting exactly why"],[m
+[31m-    ["an analytical reality", "a core operational detail"],[m
+[31m-    ["an outcome directly correlated with", "a result linked right to"],[m
+[31m-    ["from an execution standpoint", "in day-to-day execution"],[m
+[31m-    ["fundamentally indicating that", "effectively showing that"],[m
+[31m-    ["tangible physiological dividends", "clear physical benefits"],[m
+[31m-    ["substantial reinforcement", "clear backing"],[m
+[31m-    ["systematically enhance", "measurably improve"],[m
+[31m-    ["it is important to note", "worth noting"],[m
+[31m-    ["the practice trains", "this routine helps"],[m
+[31m-    ["consequently", "as a result"],[m
+[31m-    ["moreover", "on top of that"],[m
+[31m-    ["furthermore", "also"],[m
+[31m-    ["ultimately", "at the end of the day"],[m
+[31m-    [[m
+[31m-      "functions as a disciplined cognitive methodology",[m
+[31m-      "operates as a structured practice",[m
+[31m-    ],[m
+[31m-    ["optimize psychological equilibrium", "improve mental balance"],[m
+[31m-    ["Immediate psychological stabilization", "Quick mental relief"],[m
+[31m-    ["acute interior observation capabilities", "better self-awareness"],[m
+[31m-    ["Longitudinal physiological benefits", "Long-term physical benefits"],[m
+[31m-    [[m
+[31m-      "manifesting as restored circadian rhythms",[m
+[31m-      "showing up as better sleep cycles",[m
+[31m-    ],[m
+[31m-    ["Cognitive throughput concurrently sharpens", "Mental focus also sharpens"],[m
+[31m-    ["exogenous operational pressures", "outside workspace pressures"],[m
+[31m-    ["dampens amygdala reactivity", "calms the nervous system"],[m
+[31m-    ["enduring stress mitigation", "lasting stress reduction"],[m
+[31m-    ["neurocognitive conditioning", "mental conditioning"],[m
+[31m-    ["sustained executive attention", "close attention"],[m
+[31m-    ["metacognitive restructuring", "mental shifts"],[m
+[31m-    ["physiological downregulation", "physical relaxation"],[m
+[31m-    ["physiological relaxation", "physical ease"],[m
+[31m-    ["systematic introspection", "deep reflection"],[m
+[31m-    ["present-moment phenomena", "the task at hand"],[m
+[31m-    ["attentional regulation", "mental focus"],[m
+[31m-    ["measurable enhancements", "clear improvements"],[m
+[31m-    ["sleep architecture", "sleep quality"],[m
+[31m-    ["focusing the mind", "steadying attention"],[m
+[31m-    ["focus the mind", "steady attention"],[m
+[31m-    ["mental training", "focused practice"],[m
+[31m-    ["cognitive wellness", "clearer thinking"],[m
+[31m-    ["cognitive enhancement", "heightened focus"],[m
+[31m-    ["cognitive resilience", "mental endurance"],[m
+[31m-    ["effectively mitigate", "measurably reduce"],[m
+[31m-    ["substantial support", "clear empirical backing"],[m
+[31m-    ["due to the fact that", "because"],[m
+[31m-    ["a significant number of", "many"],[m
+[31m-    ["has the potential to", "can"],[m
+[31m-    ["in the realm of", "in"],[m
+[31m-    ["shed light on", "clarify"],[m
+[31m-    ["key takeaway", "central implication"],[m
+[31m-    ["In conclusion", "At the end of the day"],[m
+[31m-    ["In summary", "In short"],[m
+[31m-    ["Tapestry of", "Interplay of"],[m
+[31m-    ["Testament to", "Evidence of"],[m
+[31m-    ["Delve into", "Examine"],[m
+[31m-    ["delving into", "examining"],[m
+[31m-    ["simultaneously", "at the same time"],[m
+[31m-    ["fundamentally", "at its core"],[m
+[31m-    ["advantageous", "strategically useful"],[m
+[31m-    ["individuals", "participants"],[m
+[31m-    ["discipline", "practice"],[m
+[31m-    ["mitigate", "temper"],[m
+[31m-    ["induce", "prompt"],[m
+[31m-    ["nurtures", "reinforces"],[m
+[31m-    ["nurture", "reinforce"],[m
+[31m-    ["fosters", "builds"],[m
+[31m-    ["foster", "build"],[m
+[31m-    ["in order to", "to"],[m
+[31m-    ["leverage", "apply"],[m
+[31m-    ["utilize", "use"],[m
+[31m-    ["utilizes", "uses"],[m
+[31m-    ["facilitate", "enable"],[m
+[31m-    ["facilitates", "enables"],[m
+[31m-    ["robust", "durable"],[m
+[31m-    ["holistic", "integrated"],[m
+[31m-    ["paradigm", "framework"],[m
+[31m-    ["synergy", "coordination"],[m
+[31m-    ["plethora of", "many"],[m
+[31m-    ["a myriad of", "many"],[m
+[31m-    ["cutting-edge", "advanced"],[m
+[31m-    ["groundbreaking", "notable"],[m
+[31m-    ["underscores the importance", "makes the stakes clearer"],[m
+[31m-    ["highlights the need", "points to the need"],[m
+[31m-    ["plays a crucial role", "matters a great deal"],[m
+[31m-    ["crucial role", "central part"],[m
+[31m-    ["best practices", "proven approaches"],[m
+[31m-    ["going forward", "from here"],[m
+[31m-    ["move the needle", "create measurable change"],[m
+[31m-    ["low-hanging fruit", "easier wins"],[m
+[31m-    ["deep dive", "closer look"],[m
+[31m-    ["circle back", "return"],[m
+[31m-    ["touch base", "reconnect"],[m
+[31m-    ["bandwidth", "capacity"],[m
+[31m-    ["ecosystem", "environment"],[m
+[31m-    ["landscape", "field"],[m
+[31m-    ["journey", "process"],[m
+[31m-    ["unlock", "open"],[m
+[31m-    ["empower", "enable"],[m
+[31m-    ["streamline", "simplify"],[m
+[31m-    ["optimize", "improve"],[m
+[31m-    ["optimizes", "improves"],[m
+[31m-    ["optimization", "improvement"],[m
+[31m-  ];[m
+[31m-[m
+[31m-  let randomized = text;[m
+[31m-  vocabularyMap.forEach(([aiMarker, humanVariant]) => {[m
+[31m-    const escaped = aiMarker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");[m
+[31m-    const regex = new RegExp(`\\b${escaped}\\b`, "gi");[m
+[31m-    randomized = randomized.replace(regex, humanVariant);[m
+[31m-  });[m
+[31m-[m
+[31m-  return randomized;[m
+[31m-}[m
+[31m-[m
+[31m-function extractSentences(paragraph: string): string[] {[m
+[31m-  const matched = paragraph.match(/[^.!?]+[.!?]+(\s|$)/g);[m
+[31m-  if (!matched || matched.length === 0) {[m
+[31m-    const trimmed = paragraph.trim();[m
+[31m-    return trimmed ? [trimmed] : [];[m
+[31m-  }[m
+[31m-[m
+[31m-  return matched.map((sentence) => sentence.trim()).filter(Boolean);[m
+[31m-}[m
+[31m-[m
+[31m-function findConjunctionMatch(sentence: string): RegExpExecArray | null {[m
+[31m-  CONJUNCTION_PATTERN.lastIndex = 0;[m
+[31m-[m
+[31m-  let bestMatch: RegExpExecArray | null = null;[m
+[31m-  let bestDistance = Number.POSITIVE_INFINITY;[m
+[31m-  const midpoint = Math.floor(sentence.length / 2);[m
+[31m-  let conjunctionMatch: RegExpExecArray | null =[m
+[31m-    CONJUNCTION_PATTERN.exec(sentence);[m
+[31m-[m
+[31m-  while (conjunctionMatch !== null) {[m
+[31m-    if ([m
+[31m-      typeof conjunctionMatch.index === "number" &&[m
+[31m-      typeof conjunctionMatch[0] === "string" &&[m
+[31m-      conjunctionMatch[0].length > 0[m
+[31m-    ) {[m
+[31m-      const left = sentence.substring(0, conjunctionMatch.index).trim();[m
+[31m-      const right = sentence[m
+[31m-        .substring(conjunctionMatch.index + conjunctionMatch[0].length)[m
+[31m-        .trim();[m
+[31m-      const leftWords = left.split(/\s+/).filter(Boolean).length;[m
+[31m-      const rightWords = right.split(/\s+/).filter(Boolean).length;[m
+[31m-[m
+[31m-      if (leftWords >= 6 && rightWords >= 6) {[m
+[31m-        const distance = Math.abs(conjunctionMatch.index - midpoint);[m
+[31m-        if (distance < bestDistance) {[m
+[31m-          bestDistance = distance;[m
+[31m-          bestMatch = conjunctionMatch;[m
+[31m-        }[m
+[31m-      }[m
+[31m-    }[m
+[31m-[m
+[31m-    conjunctionMatch = CONJUNCTION_PATTERN.exec(sentence);[m
+[31m-  }[m
+[31m-[m
+[31m-  return bestMatch;[m
+[31m-}[m
+[31m-[m
+[31m-function pickUnusedTransitionInsert([m
+[31m-  usedInsertIndexes: Set<number>,[m
+[31m-): string | null {[m
+[31m-  const availableIndexes: number[] = [];[m
+[31m-[m
+[31m-  for (let i = 0; i < PARAGRAPH_TRANSITION_INSERTS.length; i += 1) {[m
+[31m-    if (!usedInsertIndexes.has(i)) {[m
+[31m-      availableIndexes.push(i);[m
+[31m-    }[m
+[31m-  }[m
+[31m-[m
+[31m-  if (availableIndexes.length === 0) {[m
+[31m-    return null;[m
+[31m-  }[m
+[31m-[m
+[31m-  const selectedSlot = Math.floor(Math.random() * availableIndexes.length);[m
+[31m-  const selectedIndex = availableIndexes[selectedSlot];[m
+[31m-  usedInsertIndexes.add(selectedIndex);[m
+[31m-  return PARAGRAPH_TRANSITION_INSERTS[selectedIndex];[m
+[31m-}[m
+[31m-[m
+[31m-function part2StartsWithActiveVerb(part2: string): boolean {[m
+[31m-  const firstToken = (part2.trim().split(/\s+/)[0] ?? "").replace([m
+[31m-    /[^\w']/g,[m
+[31m-    "",[m
+[31m-  );[m
+[31m-  return ACTIVE_VERB_STARTERS.test(firstToken);[m
+[31m-}[m
+[31m-[m
+[31m-function alignPart2AfterInsert(insert: string, part2: string): string {[m
+[31m-  if (!part2StartsWithActiveVerb(part2)) {[m
+[31m-    return part2;[m
+[31m-  }[m
+[31m-[m
+[31m-  const insertTail = (insert.trim().split(/\s+/).pop() ?? "").toLowerCase();[m
+[31m-[m
+[31m-  // "why/when/that/way improve" → "why/when/that/way they improve"[m
+[31m-  if ([m
+[31m-    insertTail === "why" ||[m
+[31m-    insertTail === "when" ||[m
+[31m-    insertTail === "that" ||[m
+[31m-    insertTail === "way"[m
+[31m-  ) {[m
+[31m-    return `they ${part2}`;[m
+[31m-  }[m
+[31m-[m
+[31m-  // Generic bridge for bare verbs after other transition shapes[m
+[31m-  return `to ${part2}`;[m
+[31m-}[m
+[31m-[m
+[31m-function sanitizeClause(text: string): string {[m
+[31m-  return text.replace(/\s+/g, " ").replace(/,\s*—/g, " —").trim();[m
+[31m-}[m
+[31m-[m
+[31m-function structuralInversionParser(paragraph: string): string {[m
+[31m-  const sentences = extractSentences(paragraph);[m
+[31m-  const processedSentences: string[] = [];[m
+[31m-  const usedInsertIndexes = new Set<number>();[m
+[31m-[m
+[31m-  for (let i = 0; i < sentences.length; i += 1) {[m
+[31m-    const current = sentences[i];[m
+[31m-    if (!current) {[m
+[31m-      continue;[m
+[31m-    }[m
+[31m-[m
+[31m-    const wordCount = current.split(/\s+/).filter(Boolean).length;[m
+[31m-    if (wordCount <= 14) {[m
+[31m-      processedSentences.push(current);[m
+[31m-      continue;[m
+[31m-    }[m
+[31m-[m
+[31m-    const conjunctionMatch = findConjunctionMatch(current);[m
+[31m-[m
+[31m-    if ([m
+[31m-      !conjunctionMatch ||[m
+[31m-      typeof conjunctionMatch.index !== "number" ||[m
+[31m-      typeof conjunctionMatch[0] !== "string" ||[m
+[31m-      conjunctionMatch[0].length === 0[m
+[31m-    ) {[m
+[31m-      processedSentences.push(current);[m
+[31m-      continue;[m
+[31m-    }[m
+[31m-[m
+[31m-    const matchedSpan = conjunctionMatch[0];[m
+[31m-    const matchedWord = (conjunctionMatch[1] ?? matchedSpan)[m
+[31m-      .toLowerCase()[m
+[31m-      .trim();[m
+[31m-    const part1 = current.substring(0, conjunctionMatch.index).trim();[m
+[31m-    const part2 = current[m
+[31m-      .substring(conjunctionMatch.index + matchedSpan.length)[m
+[31m-      .trim();[m
+[31m-[m
+[31m-    const part1Words = part1.split(/\s+/).filter(Boolean).length;[m
+[31m-    const part2Words = part2.split(/\s+/).filter(Boolean).length;[m
+[31m-[m
+[31m-    if (!part1 || !part2 || part1Words < 6 || part2Words < 6) {[m
+[31m-      processedSentences.push(current);[m
+[31m-      continue;[m
+[31m-    }[m
+[31m-[m
+[31m-    const randomInsert = pickUnusedTransitionInsert(usedInsertIndexes);[m
+[31m-    const isTooComplexForInsert =[m
+[31m-      part2StartsWithActiveVerb(part2) &&[m
+[31m-      (part2Words < 8 || !/\b(their|the|a|an|this|these|those|people|teams|students|professionals|organizations)\b/i.test(part2));[m
+[31m-[m
+[31m-    // Safe fallback: clean em-dash while preserving the original conjunction[m
+[31m-    if (!randomInsert || isTooComplexForInsert) {[m
+[31m-      processedSentences.push([m
+[31m-        sanitizeClause(`${part1} — ${matchedWord} ${part2}`),[m
+[31m-      );[m
+[31m-      continue;[m
+[31m-    }[m
+[31m-[m
+[31m-    const alignedPart2 = alignPart2AfterInsert(randomInsert, part2);[m
+[31m-    processedSentences.push([m
+[31m-      sanitizeClause(`${part1}${randomInsert}${alignedPart2}`),[m
+[31m-    );[m
+[31m-  }[m
+[31m-[m
+[31m-  return sanitizeClause(processedSentences.join(" "));[m
+[31m-}[m
+[31m-[m
+[31m-function programmaticHumanizeFilter(text: string): string {[m
+[31m-  const source = typeof text === "string" ? text : "";[m
+[31m-  if (!source.trim()) {[m
+[31m-    return "";[m
+[31m-  }[m
+[31m-[m
+[31m-  const vocabularyShattered = applyVocabularyRandomization(source);[m
+[31m-[m
+[31m-  const paragraphs = vocabularyShattered[m
+[31m-    .split(/\n+/)[m
+[31m-    .map((paragraph) => paragraph.trim())[m
+[31m-    .filter(Boolean);[m
+[31m-[m
+[31m-  const invertedParagraphs = paragraphs.map((paragraph) =>[m
+[31m-    structuralInversionParser(paragraph),[m
+[31m-  );[m
+[31m-[m
+[31m-  return invertedParagraphs[m
+[31m-    .join("\n\n")[m
+[31m-    .replace(/^#+\s*/gm, "")[m
+[31m-    .replace(/^Target\s+about\s+\d+\s+words\.?/gmi, "")[m
+[31m-    .replace(/[^\S\n]+/g, " ")[m
+[31m-    .replace(/,\s*—/g, " —")[m
+[31m-    .replace(/[ \t]+$/gm, "")[m
+[31m-    .replace(/\n{3,}/g, "\n\n")[m
+[31m-    .trim();[m
+[31m-}[m
+[31m-[m
+[31m-function readGeminiText(response: unknown): string {[m
+[31m-  if (!response || typeof response !== "object") {[m
+[31m-    return "";[m
+[31m-  }[m
+[31m-[m
+[31m-  const maybeText = (response as { text?: unknown }).text;[m
+[31m-  if (typeof maybeText === "string") {[m
+[31m-    return maybeText;[m
+[31m-  }[m
+[31m-[m
+[31m-  if (typeof maybeText === "function") {[m
+[31m-    try {[m
+[31m-      const value = (maybeText as () => unknown)();[m
+[31m-      return typeof value === "string" ? value : "";[m
+[31m-    } catch {[m
+[31m-      return "";[m
+[31m-    }[m
+[31m-  }[m
+[31m-[m
+[31m-  return "";[m
+[31m-}[m
+[31m-[m
+[31m-function splitInputParagraphs(text: string): string[] {[m
+[31m-  const doubleNewlineParagraphs = text[m
+[31m-    .split(/\n\n+/)[m
+[31m-    .map((paragraph) => paragraph.trim())[m
+[31m-    .filter(Boolean);[m
+[31m-[m
+[31m-  if (doubleNewlineParagraphs.length > 1) {[m
+[31m-    return doubleNewlineParagraphs;[m
+[31m-  }[m
+[31m-[m
+[31m-  return text[m
+[31m-    .split(/\n+/)[m
+[31m-    .map((paragraph) => paragraph.trim())[m
+[31m-    .filter(Boolean);[m
+[31m-}[m
+[31m-[m
+[31m-function buildParagraphPrompt([m
+[31m-  systemPersona: string,[m
+[31m-  paragraphText: string,[m
+[31m-  paragraphIndex: number,[m
+[31m-  totalParagraphs: number,[m
+[31m-): string {[m
+[31m-  return `${systemPersona}[m
+[31m-[m
+[31m-You are rewriting paragraph ${paragraphIndex + 1} of ${totalParagraphs} from a larger document. Preserve this as exactly one paragraph unless the source itself is a heading, list, or similarly structured block that must be kept intact.[m
+[31m-[m
+[31m-CORE RULE:[m
+[31m-Rewrite the writing naturally WITHOUT losing, changing, inventing, or rearranging important information.[m
+[31m-[m
+[31m-STRICT PRESERVATION:[m
+[31m-- Preserve every number exactly.[m
+[31m-- Preserve percentages exactly.[m
+[31m-- Preserve currency values exactly.[m
+[31m-- Preserve names exactly.[m
+[31m-- Preserve citations exactly, including formats such as (Ault et al., 2025).[m
+[31m-- Preserve headings and section numbers exactly.[m
+[31m-- Preserve bullet points and lists.[m
+[31m-- Preserve technical terms.[m
+[31m-- Preserve factual claims.[m
+[31m-- Preserve the original paragraph structure unless a small structural change is genuinely necessary for readability.[m
+[31m-- Never remove a sentence simply because it sounds formal.[m
+[31m-- Never add information that does not exist in the original.[m
+[31m-- Never change the meaning of a sentence.[m
+[31m-[m
+[31m-NATURAL REWRITING:[m
+[31m-- Make the writing sound naturally written rather than mechanically paraphrased.[m
+[31m-- Use clear, normal vocabulary.[m
+[31m-- Replace unnecessarily complicated wording with simpler wording when appropriate.[m
+[31m-- Vary sentence structure naturally.[m
+[31m-- Mix shorter and longer sentences.[m
+[31m-- Avoid repetitive sentence openings.[m
+[31m-- Avoid repetitive transition words.[m
+[31m-- Keep the writing appropriate for academic/professional contexts.[m
+[31m-- Do NOT make academic writing sound like casual conversation.[m
+[31m-- Do NOT add filler such as "you know", "basically", "like", "in fact", "from a tactical execution angle", or similar phrases unless they already exist in the original.[m
+[31m-- Do NOT deliberately introduce grammar mistakes.[m
+[31m-- Do NOT deliberately make the writing less intelligent.[m
+[31m-- Do NOT insert slang or conversational expressions.[m
+[31m-[m
+[31m-VERY IMPORTANT:[m
+[31m-The output must contain the same information as the input.[m
+[31m-[m
+[31m-Before returning the result, internally verify:[m
+[31m-1. All numbers are still present.[m
+[31m-2. All percentages are still present.[m
+[31m-3. All monetary values are still present.[m
+[31m-4. All citations are still present.[m
+[31m-5. All headings are still present.[m
+[31m-6. No new factual claims were introduced.[m
+[31m-7. No sentence has been cut off.[m
+[31m-8. The output is grammatically correct.[m
+[31m-9. The meaning has not changed.[m
+[31m-[m
+[31m-If any of these conditions cannot be satisfied, preserve the original sentence instead of aggressively rewriting it.[m
+[31m-[m
+[31m-Return ONLY the rewritten text.[m
+[31m-[m
+[31m-Text block to rewrite:[m
+[31m-${paragraphText}`;[m
+[31m-}[m
+[32m+[m[32m/** Upper bound to protect the service; long inputs are chunked, not silently truncated. */[m
+[32m+[m[32mconst MAX_TEXT_LENGTH = 100_000;[m
+ [m
+ export async function POST(req: Request) {[m
+   try {[m
+[36m@@ -498,7 +30,10 @@[m [mexport async function POST(req: Request) {[m
+ [m
+     if (trimmedText.length > MAX_TEXT_LENGTH) {[m
+       return NextResponse.json([m
+[31m-        { error: "Text is too long." },[m
+[32m+[m[32m        {[m
+[32m+[m[32m          error:[m
+[32m+[m[32m            "Text is too long to process in one request. Please shorten it and try again.",[m
+[32m+[m[32m        },[m
+         { status: 400 },[m
+       );[m
+     }[m
+[36m@@ -517,73 +52,24 @@[m [mexport async function POST(req: Request) {[m
+           ? mode[m
+           : "Professional";[m
+ [m
+[31m-    const systemPersona = resolveStructuralStyle(styleKey);[m
+[31m-    const inputParagraphs = splitInputParagraphs(trimmedText);[m
+[31m-    const inputParagraphCount = inputParagraphs.length || 1;[m
+[32m+[m[32m    const pipelineResult = await runHumanizePipeline({[m
+[32m+[m[32m      text: trimmedText,[m
+[32m+[m[32m      styleKey,[m
+[32m+[m[32m    });[m
+ [m
+[31m-    if (inputParagraphCount === 0) {[m
+[32m+[m[32m    if (!pipelineResult.result.trim()) {[m
+       return NextResponse.json([m
+[31m-        { error: "Please enter some text." },[m
+[31m-        { status: 400 },[m
+[31m-      );[m
+[31m-    }[m
+[31m-[m
+[31m-    const rewrittenParagraphs = await Promise.all([m
+[31m-      inputParagraphs.map(async (paragraphText, paragraphIndex) => {[m
+[31m-        const prompt = buildParagraphPrompt([m
+[31m-          systemPersona,[m
+[31m-          paragraphText,[m
+[31m-          paragraphIndex,[m
+[31m-          inputParagraphCount,[m
+[31m-        );[m
+[31m-[m
+[31m-        const response = await ai.models.generateContent({[m
+[31m-          model: MODEL,[m
+[31m-          contents: prompt,[m
+[31m-          config: {[m
+[31m-            temperature: 0.98,[m
+[31m-            topP: 0.95,[m
+[31m-          },[m
+[31m-        });[m
+[31m-[m
+[31m-        const rawParagraph = readGeminiText(response).trim();[m
+[31m-        if (!rawParagraph) {[m
+[31m-          throw new Error([m
+[31m-            `Empty response from Gemini engine for paragraph ${paragraphIndex + 1}.`,[m
+[31m-          );[m
+[31m-        }[m
+[31m-[m
+[31m-        return rawParagraph.replace(/\n+/g, " ").trim();[m
+[31m-      }),[m
+[31m-    );[m
+[31m-[m
+[31m-    const rawResult = rewrittenParagraphs.join("\n\n").trim();[m
+[31m-[m
+[31m-    if (!rawResult) {[m
+[31m-      return NextResponse.json([m
+[31m-        { error: "Empty response from Gemini engine." },[m
+[32m+[m[32m        { error: "Unable to humanize text. Please try again." },[m
+         { status: 500 },[m
+       );[m
+     }[m
+ [m
+[31m-    const humanizedOutput = programmaticHumanizeFilter(rawResult);[m
+[31m-[m
+[31m-    if (!humanizedOutput) {[m
+[31m-      return NextResponse.json([m
+[31m-        { error: "Failed to process rewritten content." },[m
+[31m-        { status: 500 },[m
+[31m-      );[m
+[31m-    }[m
+[31m-[m
+[31m-    return NextResponse.json({ result: humanizedOutput });[m
+[32m+[m[32m    return NextResponse.json({ result: pipelineResult.result });[m
+   } catch (err: unknown) {[m
+     console.error("API Route Error Context:", err);[m
+[31m-    const message =[m
+[31m-      err instanceof Error[m
+[31m-        ? err.message[m
+[31m-        : "An internal processing error occurred.";[m
+[31m-    return NextResponse.json({ error: message }, { status: 500 });[m
+[32m+[m[32m    return NextResponse.json([m
+[32m+[m[32m      { error: "Unable to humanize text. Please try again." },[m
+[32m+[m[32m      { status: 500 },[m
+[32m+[m[32m    );[m
+   }[m
+ }[m
+[31m-[m
+[31m-[m
