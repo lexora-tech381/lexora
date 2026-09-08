@@ -22,9 +22,9 @@ const ACTIVE_VERB_STARTERS =
   /^(improve|find|enhance|reduce|support|enable|create|build|maintain|deliver|provide|offer|allow|require|include|involve|produce|drive|shape|reflect|indicate|demonstrate|operate|function|strengthen|increase|help|work|lead|promote|train|focus|balance|develop|establish|ensure|yield|generate|optimize|mitigate|foster|nurture|blunt|temper|prompt|achieve|gain|restore|protect|guide|manage|organize|clarify|simplify|expand|strengthen)\b/i;
 
 const NATURAL_REWRITE_CORE =
-  "Rewrite the user's text so it reads naturally, clearly, and fluently while preserving the original meaning and factual information.";
+  "Rewrite the writing naturally WITHOUT losing, changing, inventing, or rearranging important information.";
 
-const EXECUTIVE_FALLBACK_PERSONA = `${NATURAL_REWRITE_CORE} Keep a professional tone: clear, precise, and polished without sounding stiff or robotic.`;
+const EXECUTIVE_FALLBACK_PERSONA = `${NATURAL_REWRITE_CORE} Keep the writing appropriate for professional contexts. Do not make it sound like casual conversation.`;
 
 function resolveStructuralStyle(styleKey: unknown): string {
   if (typeof styleKey !== "string" || styleKey.trim().length === 0) {
@@ -34,7 +34,7 @@ function resolveStructuralStyle(styleKey: unknown): string {
   const normalized = styleKey.trim();
 
   if (normalized === "Academic") {
-    return `${NATURAL_REWRITE_CORE} Keep an academically appropriate tone: thoughtful and precise, without sounding formulaic or artificially dense.`;
+    return `${NATURAL_REWRITE_CORE} Keep the writing appropriate for academic contexts. Do not make academic writing sound like casual conversation.`;
   }
 
   if (normalized === "Professional") {
@@ -46,7 +46,7 @@ function resolveStructuralStyle(styleKey: unknown): string {
     normalized === "Simple" ||
     normalized === "Natural"
   ) {
-    return `${NATURAL_REWRITE_CORE} Keep a natural, approachable tone when the source allows it, without becoming excessively casual.`;
+    return `${NATURAL_REWRITE_CORE} Preserve the original tone. If the source is academic or professional, keep it that way. Only keep a lighter tone when the original is already casual.`;
   }
 
   return EXECUTIVE_FALLBACK_PERSONA;
@@ -415,32 +415,58 @@ function buildParagraphPrompt(
   paragraphIndex: number,
   totalParagraphs: number,
 ): string {
-  const paragraphWordCount = paragraphText.split(/\s+/).filter(Boolean).length;
-
   return `${systemPersona}
 
-You are rewriting paragraph ${paragraphIndex + 1} of ${totalParagraphs} from a larger document. Preserve this as exactly one paragraph.
+You are rewriting paragraph ${paragraphIndex + 1} of ${totalParagraphs} from a larger document. Preserve this as exactly one paragraph unless the source itself is a heading, list, or similarly structured block that must be kept intact.
 
-Rewrite the user's text so it reads naturally, clearly, and fluently while preserving the original meaning and factual information.
+CORE RULE:
+Rewrite the writing naturally WITHOUT losing, changing, inventing, or rearranging important information.
 
-Requirements:
-1. Simplify overly formal or unnecessarily sophisticated vocabulary when a simpler natural word works better.
-2. Vary sentence length and sentence structure naturally.
-3. Avoid repetitive sentence patterns.
-4. Avoid repetitive transitions and formulaic phrasing.
-5. Make the writing flow naturally from one idea to the next.
-6. Preserve the original meaning, facts, examples, numbers, names, citations, and technical terminology.
-7. Never intentionally introduce grammar mistakes, spelling mistakes, awkward phrasing, or incorrect English.
-8. Do not make every sentence short.
-9. Do not make the text excessively casual or conversational unless the original tone is casual.
-10. Avoid filler phrases such as "you know", "basically", "like", etc. unless they genuinely fit the context.
-11. Remove unnecessary repetition.
-12. Restructure sentences when it improves clarity and natural flow.
-13. Do not add facts or information that were not in the original text.
-14. Preserve the appropriate tone of the original text. Academic text should remain academically appropriate, professional text should remain professional, and casual text should remain casual.
-15. The final result should be fluent, coherent, natural, and readable rather than mechanically paraphrased.
+STRICT PRESERVATION:
+- Preserve every number exactly.
+- Preserve percentages exactly.
+- Preserve currency values exactly.
+- Preserve names exactly.
+- Preserve citations exactly, including formats such as (Ault et al., 2025).
+- Preserve headings and section numbers exactly.
+- Preserve bullet points and lists.
+- Preserve technical terms.
+- Preserve factual claims.
+- Preserve the original paragraph structure unless a small structural change is genuinely necessary for readability.
+- Never remove a sentence simply because it sounds formal.
+- Never add information that does not exist in the original.
+- Never change the meaning of a sentence.
 
-Keep roughly the same depth and coverage as the source paragraph. Target about ${paragraphWordCount} words. Rewrite the ideas fully. Do not summarize away supporting details, and do not invent extra content.
+NATURAL REWRITING:
+- Make the writing sound naturally written rather than mechanically paraphrased.
+- Use clear, normal vocabulary.
+- Replace unnecessarily complicated wording with simpler wording when appropriate.
+- Vary sentence structure naturally.
+- Mix shorter and longer sentences.
+- Avoid repetitive sentence openings.
+- Avoid repetitive transition words.
+- Keep the writing appropriate for academic/professional contexts.
+- Do NOT make academic writing sound like casual conversation.
+- Do NOT add filler such as "you know", "basically", "like", "in fact", "from a tactical execution angle", or similar phrases unless they already exist in the original.
+- Do NOT deliberately introduce grammar mistakes.
+- Do NOT deliberately make the writing less intelligent.
+- Do NOT insert slang or conversational expressions.
+
+VERY IMPORTANT:
+The output must contain the same information as the input.
+
+Before returning the result, internally verify:
+1. All numbers are still present.
+2. All percentages are still present.
+3. All monetary values are still present.
+4. All citations are still present.
+5. All headings are still present.
+6. No new factual claims were introduced.
+7. No sentence has been cut off.
+8. The output is grammatically correct.
+9. The meaning has not changed.
+
+If any of these conditions cannot be satisfied, preserve the original sentence instead of aggressively rewriting it.
 
 Return ONLY the rewritten text.
 
