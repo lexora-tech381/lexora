@@ -47,3 +47,6 @@ next-env.d.ts
 .cache
 .parcel-cache
 .vscode-test
+
+# Local evaluation reports (dataset-driven; keep offline)
+eval-results/

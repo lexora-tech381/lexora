@@ -1,9 +1,14 @@
 import { GoogleGenAI } from "@google/genai";
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const DEFAULT_GEMINI_MODEL = "gemini-flash-lite-latest";
 const MAX_OUTPUT_TOKENS = 8192;
 
 let aiClient: GoogleGenAI | null = null;
+
+function getGeminiModel(): string {
+  const configured = process.env.GEMINI_MODEL?.trim();
+  return configured || DEFAULT_GEMINI_MODEL;
+}
 
 function getGeminiClient(): GoogleGenAI {
   if (aiClient) return aiClient;
@@ -67,12 +72,14 @@ export function normalizeHumanizedOutput(text: string): string {
 
 export async function generateGeminiText(prompt: string): Promise<string> {
   const ai = getGeminiClient();
+  const model = getGeminiModel();
+  console.log(`Gemini model: ${model}`);
 
   const response = await ai.models.generateContent({
-    model: MODEL,
+    model,
     contents: prompt,
     config: {
-      temperature: 0.35,
+      temperature: 0.55,
       topP: 0.9,
       maxOutputTokens: MAX_OUTPUT_TOKENS,
     },

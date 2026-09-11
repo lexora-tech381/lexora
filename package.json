@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "eval:humanize": "npx --yes tsx scripts/run-humanize-eval.ts"
   },
   "dependencies": {
     "@google/genai": "^2.13.0",
