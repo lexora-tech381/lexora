@@ -1,6 +1,6 @@
 export function resolveHumanizeStyle(styleKey: unknown): string {
   const core =
-    "Substantially rewrite the wording and sentence structure while preserving the original meaning and all factual information. Preserving content does not mean preserving the original wording.";
+    "Substantially rewrite wording and sentence structure while preserving meaning and all factual information. Preserving content does not mean preserving the original wording. Keep the author's natural level of formality — clear and professional, never ornate or over-polished.";
 
   if (typeof styleKey !== "string" || styleKey.trim().length === 0) {
     return `${core} Keep the writing appropriate for professional contexts.`;
@@ -9,11 +9,11 @@ export function resolveHumanizeStyle(styleKey: unknown): string {
   const normalized = styleKey.trim();
 
   if (normalized === "Academic") {
-    return `${core} Keep the writing academically appropriate. Do not make it casual.`;
+    return `${core} Keep the writing academically appropriate and credible. Do not make it casual, and do not make it more elaborate than the source.`;
   }
 
   if (normalized === "Professional") {
-    return `${core} Keep the writing professional and clear.`;
+    return `${core} Keep the writing professional, clear, and readable.`;
   }
 
   if (
@@ -39,22 +39,28 @@ export function buildRewritePrompt(
 
   return `${stylePersona}
 
-Your task is a genuine rewrite, not a proofread.
+Your task is a genuine rewrite, not a proofread and not a sophistication upgrade.
 
-Rewrite the source text so it is clearly different in wording and sentence structure while keeping the same meaning and all important information.
+Rewrite the source so it is meaningfully different in wording and structure while keeping the same meaning and all important information. Aim for NATURAL + CLEAR + PROFESSIONAL writing.
 
 You MUST:
-- Produce a substantial rewrite of suitable prose. Do not merely tidy grammar, fix punctuation, or lightly paraphrase.
-- Vary sentence openings naturally.
-- Restructure clauses and rearrange sentence order within a paragraph when that improves clarity.
-- Replace repetitive wording with natural alternatives.
+- Produce a real rewrite of suitable prose. Do not merely tidy grammar or lightly paraphrase.
+- Prefer simple, natural wording when it communicates the same meaning.
+- Preserve the author's natural level of formality. Do not automatically make ordinary academic or business writing more elaborate.
+- Vary sentence openings and restructure clauses when that improves clarity or flow.
+- Replace repetitive wording with natural alternatives — not fancier synonyms.
 - Combine or split sentences when that improves readability.
-- Vary sentence length naturally.
-- Prefer direct, natural phrasing over inflated or unnecessarily formal vocabulary.
-- Avoid generic AI-style transitions (for example: furthermore, moreover, additionally, in conclusion, it is important to note).
+- Keep a natural mix of short, medium, and longer sentences. Do not polish every sentence into the same formal style.
+- For factual or analytical writing, prioritize precision and readability over stylistic sophistication.
+- Preserve the writer's intended level of confidence. Do not strengthen weak claims, weaken strong claims, or add interpretations.
+- Avoid stock AI-sounding transitions and rhetorical phrases unless they are genuinely needed (for example: furthermore, moreover, additionally, in conclusion, it is important to note).
 - Keep paragraphs and formatting coherent.
 
 You MUST NOT:
+- Inflate wording or swap in unnecessarily sophisticated synonyms.
+- Prefer elaborate phrasing over plain phrasing that already works.
+- Force every sentence to be dramatically different.
+- Rewrite purely for the sake of changing words.
 - Copy the source sentence-by-sentence with only minor wording changes.
 - Return text that is essentially identical to the source.
 - Invent facts, add new arguments, or remove information.
@@ -63,17 +69,34 @@ You MUST NOT:
 - Add filler.
 - Make the writing unnecessarily casual.
 
+Avoid synonym inflation like:
+- "customers" → "demographic" / "the male demographic"
+- "before" → "prior to"
+- "followed by" → "succeeded sequentially by"
+- "should not" → "ought not to"
+- "avoid" → "steer clear of"
+- plain statements rewritten into ornate constructions that "suffer in precision"
+
+Good natural rewrite:
+Input: "Sales were not evenly distributed across regions. The East region recorded the highest total sales, followed by North, West, and South."
+Good: "Sales varied across the regions. East recorded the highest total sales, followed by North, West, and South."
+Not desired: "Sales figures exhibited considerable geographical variation, with the East emerging as the predominant territory in terms of overall revenue generation."
+
+Another good natural rewrite:
+Input: "Prior to data refinement, the West recorded the peak order count at 246, closely followed by the South with 244 orders."
+Better direction: "Before cleaning, the West had the highest number of orders, with 246, followed by the South with 244."
+
+Structural rewrite example (content preserved, wording changed naturally):
+Input: "Businesses should therefore investigate missing regional information rather than assuming that the 'Unknown' group represents a specific customer segment."
+Good: "Rather than treating the 'Unknown' group as a defined customer segment, businesses should first investigate why regional information is missing."
+
+Do not force every single sentence to change, but the overall passage must be meaningfully rewritten when the source contains substantial prose.
+
 Preserve exactly (factually unchanged):
 - numbers, percentages, monetary values, dates, names
 - citations, URLs, headings, section numbering
 - technical terminology, formulas/equations, quoted text
 - factual claims and the relationships between claims
-
-Example of the desired rewrite depth:
-Input: "Businesses should therefore investigate missing regional information rather than assuming that the 'Unknown' group represents a specific customer segment."
-Good rewrite: "Rather than treating the 'Unknown' group as a defined customer segment, businesses should first investigate why regional information is missing."
-
-Do not force every single sentence to change, but the overall passage must be meaningfully rewritten when the source contains substantial prose.
 
 Preserve formatting as much as possible: headings, paragraphs, bullets, numbered sections, line breaks, and markdown structure.
 Start from the beginning of the source. Do not skip opening content.
@@ -107,7 +130,7 @@ export function buildRepairPrompt(params: {
 
 The previous rewrite failed preservation checks. Rewrite the text again.
 
-Keep making a genuine rewrite with different wording and sentence structure. Do not fall back to lightly editing or copying the original.
+Keep a genuine rewrite with different wording and sentence structure, but stay natural and clear — do not make the writing more ornate or synonym-heavy. Do not fall back to lightly editing or copying the original.
 
 Every required number, percentage, monetary value, citation, heading, factual detail, and technical term must remain. Do not remove or invent information. Preserve formatting and paragraph order. Return only the corrected rewritten text.
 
@@ -143,8 +166,10 @@ Rewrite the original text again with clearly different wording and sentence stru
 
 Requirements:
 - Do not proofread. Do not lightly paraphrase.
-- Restructure sentences and clauses.
-- Vary openings and sentence length.
+- Restructure sentences and clauses where useful.
+- Prefer simple, natural wording — not fancier synonyms.
+- Keep the author's natural formality. Do not make the text more elaborate.
+- Vary openings and sentence length naturally.
 - Keep all facts, numbers, citations, headings, quotes, URLs, and technical terms intact.
 - Do not invent or remove information.
 - Return ONLY the rewritten text.
